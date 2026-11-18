@@ -162,6 +162,18 @@ C_NamePlate = {
 }
 local menuCallbacks = {}
 Menu = { ModifyMenu = function(tag, fn) menuCallbacks[tag] = fn end }
+local entryMenu
+MenuUtil = { CreateContextMenu = function(owner, generator)
+    entryMenu = {owner = owner, items = {}}
+    local root = {
+        CreateTitle = function(_, title) entryMenu.title = title end,
+        CreateDivider = function() end,
+        CreateButton = function(_, title, callback) entryMenu.items[title] = {click = callback} end,
+        CreateRadio = function(_, title, selected, callback) entryMenu.items[title] = {selected = selected, click = callback} end,
+    }
+    generator(owner, root)
+end }
+
 local registeredSettings
 Settings = {
     RegisterCanvasLayoutCategory = function(panel, name)
@@ -638,16 +650,20 @@ ME.UpdateTarget()
 check(book.note:GetText() == "A new short grudge", "background character refresh preserves unsaved note draft")
 book.saveNote.scripts.OnClick(book.saveNote)
 check(not book.saveNote.enabled and profileEntry.note == "A new short grudge", "saving clears dirty state")
-check(book.relationshipChecks.enemy:GetChecked() and not book.relationshipChecks.rival:GetChecked(), "current relationship visibly selected")
-book.relationshipChecks.rival.scripts.OnClick(book.relationshipChecks.rival)
-check(profileEntry.status == "rival" and book.relationshipChecks.rival:GetChecked()
-    and not book.relationshipChecks.enemy:GetChecked(), "relationship selection is exclusive")
-book.editButtons[2].scripts.OnClick(book.editButtons[2])
+local profileRow
+for _, row in ipairs(book.rows) do if row.key == "profile example" then profileRow = row end end
+check(profileRow, "saved player is present in the list")
+profileRow.scripts.OnClick(profileRow, "RightButton")
+check(entryMenu.title == "Profile Example" and entryMenu.items["Mortal Enemy"].selected()
+    and not entryMenu.items.Rival.selected(), "entry menu shows current relationship")
+entryMenu.items.Rival.click()
+check(profileEntry.status == "rival" and entryMenu.items.Rival.selected(), "context menu changes relationship")
+entryMenu.items.Forgive.click()
 check(pendingPopup and pendingPopup.text == "Are you sure you want to forgive Profile Example?"
     and ME.db.entries["profile example"] == profileEntry, "forgive requires named confirmation")
 pendingPopup = nil -- Cancel/Escape: no accept callback.
 check(ME.db.entries["profile example"] == profileEntry, "cancel leaves entry unchanged")
-book.editButtons[2].scripts.OnClick(book.editButtons[2])
+entryMenu.items.Forgive.click()
 ME.SelectEntry("manual example")
 StaticPopupDialogs[pendingPopup.which].OnAccept(pendingPopup, pendingPopup.data)
 check(not ME.db.entries["profile example"] and ME.db.entries["manual example"], "confirmation forgives original player even after selection changes")
@@ -664,4 +680,20 @@ ME.InitDB()
 check(migrated.characterUpdatedAt == 2000 and not migrated.classObservedAt and not migrated.levelObservedAt,
     "legacy field dates migrate into one date and are removed")
 check(ME.Note("One\nshort\tgrudge") == "One short grudge", "notes stay single-line")
+ME.SelectEntry("menu example")
+ME.ShowEntryMenu(book, "menu example")
+entryMenu.items["Edit note"].click()
+check(book.note:HasFocus() and book.selection:GetText() == "Menu Example", "context edit note focuses selected player's input")
+local originalMenu = entryMenu
+ME.SelectEntry("extra person9")
+originalMenu.items["Mortal Enemy"].click()
+check(ME.db.entries["menu example"].status == "enemy" and ME.db.entries["extra person9"].status == "rival",
+    "context action keeps original player after selection changes")
+local beforeRemoval = ME.db.entries["menu example"]
+ME.Remove("menu example")
+ME.AddNamedPlayer("Menu Example", "rival")
+originalMenu.items["Mortal Enemy"].click()
+check(ME.db.entries["menu example"] ~= beforeRemoval and ME.db.entries["menu example"].status == "rival",
+    "stale context menu cannot change a replacement entry")
+check(not book.relationshipChecks and #book.editButtons == 1, "relationship and forgive controls removed from detail pane")
 io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, settings category, target strip, player menus, add-by-name form, per-character persistence, current-realm enforcement\n")

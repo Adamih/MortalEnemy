@@ -17,9 +17,30 @@ local function ScrollList(value)
     window.listScroll:SetVerticalScroll(value)
     window.scrollbar:SetValue(value)
 end
+function ME.ShowEntryMenu(owner, key)
+    local db, entry = ME.db, ME.db.entries[key]
+    if not entry or not MenuUtil or not MenuUtil.CreateContextMenu then return end
+    local function Current() return ME.db == db and db.entries[key] == entry end
+    MenuUtil.CreateContextMenu(owner, function(_, root)
+        root:CreateTitle(entry.name)
+        for _, status in ipairs({ "rival", "enemy" }) do
+            root:CreateRadio(ME.styles[status].label,
+                function() return Current() and entry.status == status end,
+                function()
+                    if Current() then entry.status = status; ME.Changed() end
+                end)
+        end
+        root:CreateDivider()
+        root:CreateButton("Edit note", function()
+            if Current() then ME.SelectEntry(key); window.note:SetFocus() end
+        end)
+        root:CreateButton("Forgive", function() if Current() then ME.ConfirmForgive(key) end end)
+    end)
+end
 local function MakeRow(index)
     local row = CreateFrame("Button", nil, window.listContent)
     row:SetSize(268, 44)
+    row:RegisterForClicks("LeftButtonUp", "RightButtonUp")
     row:SetPoint("TOPLEFT", 0, -(index - 1) * rowHeight)
     row.selected = row:CreateTexture(nil, "BACKGROUND")
     row.selected:SetAllPoints()
@@ -38,10 +59,13 @@ local function MakeRow(index)
     row.detail:SetPoint("TOPLEFT", 39, -24)
     row.detail:SetWidth(224)
     row.detail:SetJustifyH("LEFT")
-    row:SetScript("OnClick", function(self)
+    row:SetScript("OnClick", function(self, button)
+        local key = self.key
+        if not key then return end
         window.note:ClearFocus()
-        selectedKey = self.key
+        selectedKey = key
         ME.RefreshWindow()
+        if button == "RightButton" then ME.ShowEntryMenu(window, key) end
     end)
     return row
 end
@@ -117,10 +141,6 @@ function ME.RefreshWindow()
         window.editingKey = selectedKey
     end
     for _, button in ipairs(window.editButtons) do button:SetEnabled(entry ~= nil) end
-    for status, check in pairs(window.relationshipChecks) do
-        check:SetEnabled(entry ~= nil)
-        check:SetChecked(entry ~= nil and entry.status == status)
-    end
     ME.UpdateNoteState()
     ME.RefreshTargetStrip()
 end
@@ -267,27 +287,8 @@ local function CreateWindow()
     end
     window.note:SetScript("OnEnterPressed", SaveNote)
     window.saveNote = Button(window, "Save note", 120, 354, -432, SaveNote)
-    window.editButtons = {
-        window.saveNote,
-        Button(window, "Forgive", 92, 650, -522, function() if selectedKey then ME.ConfirmForgive(selectedKey) end end),
-    }
-    Label("Relationship", "GameFontNormal", 354, -474)
-    window.relationshipChecks = {}
-    for i, status in ipairs({ "rival", "enemy" }) do
-        local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
-        check:SetPoint("TOPLEFT", 354 + (i - 1) * 166, -493)
-        check:SetFrameLevel(window:GetFrameLevel() + 4)
-        local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-        label:SetPoint("LEFT", check, "RIGHT", 0, 0)
-        label:SetText(ME.styles[status].label)
-        check:SetScript("OnClick", function()
-            if selectedKey and ME.db.entries[selectedKey] then
-                ME.db.entries[selectedKey].status = status
-                ME.Changed()
-            end
-        end)
-        window.relationshipChecks[status] = check
-    end
+    window.editButtons = { window.saveNote }
+    Label("Right-click a name for actions.", "GameFontDisableSmall", 28, -534, 276)
     window.filterTabs = {}
     for i, item in ipairs({ { "all", "All" }, { "rival", "Rivals" }, { "enemy", "Enemies" } }) do
         local tab = CreateFrame("Button", nil, window, "PanelTabButtonTemplate")

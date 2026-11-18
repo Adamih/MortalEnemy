@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.7.0 targets interface 16001.
+The other player does not need the addon. Version 0.7.1 targets interface 16001.
 
 ## First run
 
@@ -42,8 +42,8 @@ standard title/close controls, native inset panels, and All / Rivals / Enemies t
 The left pane is a scrollable list; use the mouse wheel or drag the scrollbar.
 Search matches full names and personal notes, combined with the active tab.
 The right pane shows the selected player's relationship, last recorded sighting,
-date added, and a short grudge. Save the note, change their relationship, or forgive them
-from that pane. Adding a player clears search/filters and scrolls to their entry.
+date added, and a short grudge. Save the note in the detail pane; right-click a
+name in the list to change the relationship, edit its note, or forgive them. Adding a player clears search/filters and scrolls to their entry.
 The target strip remains above both panes, and Add player uses matching native
 window chrome. Settings stay on WoW's separate AddOns preferences page.
 
@@ -120,8 +120,10 @@ Save note is enabled only when the note has changed. Existing longer notes stay
 in saved data until edited and saved again. Marking the same player again keeps
 their note unless you provide a replacement.
 
-The Relationship choices show the current selection and are mutually exclusive.
-**Forgive** is separated from note editing and always asks:
+Right-click any nemesis list entry to open its action menu. **Rival** and
+**Mortal Enemy** show the current selection and change the relationship.
+**Edit note** opens that player's details and focuses the short note input.
+**Forgive** always asks:
 “Are you sure you want to forgive NAME?” Choose Forgive to delete that entry, or
 Cancel/Escape to keep it. `/mortal remove` remains a compatibility alias and also
 requires confirmation.
@@ -200,7 +202,9 @@ them untargeted but their nameplate visible, and during combat. The output repor
 - [ ] Targeting a saved player updates readable character fields and the single update date.
 - [ ] Restricted/missing fields retain previous values; an unreadable snapshot keeps the date.
 - [ ] Forgive asks for confirmation; Cancel/Escape leaves the entry unchanged.
-- [ ] Relationship choices show the current status; Save note enables only for a changed note.
+- [ ] Right-click a list entry: current relationship is selected; changes affect that entry.
+- [ ] Edit note focuses the correct player's input; Forgive asks for confirmation.
+- [ ] Save note enables only for a changed note.
 - [ ] Settings button opens the actual WoW AddOns preferences page.
 - [ ] Player right-click actions mark the clicked character after retargeting.
 - [ ] Add-by-name form validates first/last name and saves optional notes.
