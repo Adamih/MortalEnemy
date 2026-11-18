@@ -121,8 +121,8 @@ local function CreateWindow()
     }
     Label("OPEN WORLD DISPLAY", "GameFontNormal", 20, -523)
     local columns = {
-        { "badge", "Badge", 170 }, { "glow", "Glow", 260 },
-        { "tooltip", "Tooltip", 350 }, { "tooltipNote", "Note", 440 },
+        { "badge", "Badge", 180 }, { "tooltip", "Tooltip", 300 },
+        { "tooltipNote", "Note", 420 },
     }
     for _, column in ipairs(columns) do Label(column[2], "GameFontHighlightSmall", column[3], -549) end
     window.displayChecks = {}

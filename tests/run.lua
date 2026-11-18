@@ -186,10 +186,6 @@ event("NAME_PLATE_UNIT_ADDED", "nameplate1")
 local badge
 for _, f in ipairs(frames) do if f.parent == plates.nameplate1 and f.icon then badge = f end end
 check(badge and badge:IsShown(), "saved player's nameplate gets badge")
-local glow
-for _, f in ipairs(frames) do if f.parent == plates.nameplate1 and f.borders then glow = f end end
-check(glow and glow:IsShown(), "saved player's nameplate gets glow")
-check(glow.point[2] == plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar, "glow hugs health bar, not oversized plate root")
 check(badge.point[2] == plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar
     and badge.point[1] == "RIGHT" and badge.point[3] == "LEFT" and badge.point[4] == -6,
     "badge sits just left of the health bar")
@@ -198,17 +194,12 @@ for _, f in ipairs(frames) do check(not (f.parent == UIParent and f.icon and not
 local bar = plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar
 bar:Hide()
 ME.RefreshWorld()
-check(not glow:IsShown() and badge:IsShown(), "name-only plates keep badge without a floating glow box")
+check(badge:IsShown(), "name-only plates keep badge")
 bar:Show()
 ME.RefreshWorld()
 
-command("glow enemy")
-check(not glow:IsShown() and badge:IsShown(), "glow toggles independently of badge")
-check(ME.db.settings.display.rival.glow, "enemy setting does not change rival setting")
-command("glow enemy")
-check(glow:IsShown(), "glow re-enables immediately")
 command("badges enemy")
-check(not badge:IsShown() and glow:IsShown(), "badge toggles independently of glow")
+check(not badge:IsShown(), "badge toggles off")
 command("badges enemy")
 event("PLAYER_ENTERING_WORLD")
 check(ME.units.nameplate1 and badge:IsShown(), "world transition recovers visible plates")
@@ -224,14 +215,14 @@ for i = 1, 300 do now = now + 0.5; controller.scripts.OnUpdate(controller, 0.5) 
 check(sounds == soundCount, "continuous visibility does not repeat alert")
 units.target = nil
 event("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check(not badge:IsShown() and not glow:IsShown(), "removed nameplate hides badge and glow")
+check(not badge:IsShown(), "removed nameplate hides badge")
 now = now + 5
 event("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(sounds == soundCount + 1, "return after cooldown alerts")
 -- Recycled unit tokens must not leave a badge on the next player.
 units.nameplate1 = player("Bob", "OtherRealm", "Player-2")
 ME.UpdatePlate("nameplate1")
-check(not badge:IsShown() and not glow:IsShown(), "nameplate recycling clears badge and glow")
+check(not badge:IsShown(), "nameplate recycling clears badge")
 units.nameplate1 = player(secret, "HomeRealm", secret)
 ME.UpdatePlate("nameplate1")
 check(not badge:IsShown(), "restricted name skips matching")
@@ -271,16 +262,15 @@ command("remove Alice-HomeRealm")
 check(ME.db.entries["alice redfen"] ~= nil, "realm suffix is not accepted when removing")
 command("list")
 check(MortalEnemyWindow:IsShown(), "window opens")
-local rivalGlowCheck
+local rivalBadgeCheck
 for _, f in ipairs(frames) do
-    if f.kind == "CheckButton" and f.point and f.point[2] == 260 and f.point[3] == -568 then rivalGlowCheck = f end
+    if f.kind == "CheckButton" and f.point and f.point[2] == 180 and f.point[3] == -568 then rivalBadgeCheck = f end
 end
-check(rivalGlowCheck, "per-status display controls exist")
-rivalGlowCheck:SetChecked(false)
-rivalGlowCheck.scripts.OnClick(rivalGlowCheck)
-check(not ME.db.settings.display.rival.glow and ME.db.settings.display.enemy.glow,
-    "rival glow checkbox changes only its own setting")
-
+check(rivalBadgeCheck, "per-status display controls exist")
+rivalBadgeCheck:SetChecked(false)
+rivalBadgeCheck.scripts.OnClick(rivalBadgeCheck)
+check(not ME.db.settings.display.rival.badge and ME.db.settings.display.enemy.badge,
+    "rival badge checkbox changes only its own setting")
 local row
 for _, f in ipairs(frames) do if f.key == "bob stone" then row = f end end
 check(row, "list row rendered")
@@ -345,7 +335,10 @@ ME.db.settings.badges = false
 ME.InitDB()
 check(not ME.db.settings.display.enemy.badge and not ME.db.settings.display.rival.badge,
     "legacy disabled badges migrate without re-enabling")
-check(ME.db.settings.display.enemy.glow and ME.db.settings.display.enemy.tooltip, "new display options default enabled")
+check(ME.db.settings.display.enemy.tooltip, "tooltip defaults enabled")
+ME.db.settings.display.enemy.glow = true
+ME.InitDB()
+check(ME.db.settings.display.enemy.glow == nil, "obsolete glow preference is removed")
 ME.db.settings.display = configuredDisplay
 local saved = MortalEnemyCharDB
 ME.InitDB()
@@ -367,4 +360,4 @@ check(next(ME.db.entries) == nil, "remove final entry")
 ME.db.entries.bad = {status = "invalid"}
 ME.InitDB()
 check(next(ME.db.entries) == nil, "malformed records ignored")
-io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/glows/tooltips, tooltip lifecycle, commands, UI, per-character persistence, current-realm enforcement\n")
+io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, per-character persistence, current-realm enforcement\n")

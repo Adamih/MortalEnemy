@@ -46,12 +46,13 @@ function ME.InitDB()
     for status in pairs(ME.styles) do
         local options = ME.db.settings.display[status]
         if type(options) ~= "table" then options = {}; ME.db.settings.display[status] = options end
-        for _, key in ipairs({ "badge", "glow", "tooltip", "tooltipNote" }) do
+        for _, key in ipairs({ "badge", "tooltip", "tooltipNote" }) do
             if type(options[key]) ~= "boolean" then
                 options[key] = key ~= "badge" or ME.db.settings.badges ~= false
             end
         end
         options.badgeText = nil
+        options.glow = nil
     end
     ME.db.settings.badges = nil
     for key, entry in pairs(ME.db.entries) do

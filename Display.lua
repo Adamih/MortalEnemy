@@ -1,7 +1,6 @@
 local _, ME = ...
 ME.units = {}
-local badges, glows, encounters = {}, {}, {}
-local glowAlpha = { 0.75, 0.22, 0.08 }
+local badges, encounters = {}, {}
 local notice
 local function MakeBadge(parent)
     local badge = CreateFrame("Frame", nil, parent)
@@ -72,21 +71,6 @@ function ME.Observe(entry, key)
         ME.Print("Spotted " .. entry.name .. " (" .. ME.styles[entry.status].label .. ").")
     end
 end
-local function MakeGlow(parent)
-    -- All borders belong to us: no edits to the plate's health bar or textures.
-    local glow = CreateFrame("Frame", nil, parent)
-    glow:EnableMouse(false)
-    glow.borders = {}
-    for i, padding in ipairs({ 0, 1, 3 }) do
-        local border = CreateFrame("Frame", nil, glow, "BackdropTemplate")
-        border:EnableMouse(false)
-        border:SetPoint("TOPLEFT", glow, "TOPLEFT", -padding, padding)
-        border:SetPoint("BOTTOMRIGHT", glow, "BOTTOMRIGHT", padding, -padding)
-        border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = i == 1 and 1 or 2 })
-        glow.borders[i] = border
-    end
-    return glow
-end
 local function VisualAnchors(plate)
     local frame = plate.UnitFrame
     if not frame or (frame.IsForbidden and frame:IsForbidden()) then return nil end
@@ -102,15 +86,14 @@ local function VisualAnchors(plate)
     return healthBar, name
 end
 function ME.UpdatePlate(unit)
-    local badge, glow = badges[unit], glows[unit]
+    local badge = badges[unit]
     if badge then badge:Hide() end
-    if glow then glow:Hide() end
     if not ME.units[unit] then return end
     local entry, key = ME.Find(ME.Identity(unit))
     if not entry then return end
     ME.Observe(entry, key)
     local options = ME.db.settings.display[entry.status]
-    if not options.badge and not options.glow then return end
+    if not options.badge then return end
     local plate = ME.Read(C_NamePlate and C_NamePlate.GetNamePlateForUnit, unit)
     if not plate or (plate.IsForbidden and plate:IsForbidden()) then return end
     local healthBar, nameAnchor = VisualAnchors(plate)
@@ -122,23 +105,10 @@ function ME.UpdatePlate(unit)
         badge:SetPoint("RIGHT", badgeAnchor, "LEFT", -6, 0)
         Paint(badge, entry)
     end
-    if options.glow and healthBar then
-        if not glow then glow = MakeGlow(plate); glows[unit] = glow end
-        glow:SetParent(plate)
-        glow:ClearAllPoints()
-        glow:SetPoint("TOPLEFT", healthBar, "TOPLEFT", -2, 2)
-        glow:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 2, -2)
-        local style = ME.styles[entry.status]
-        for i, border in ipairs(glow.borders) do
-            border:SetBackdropBorderColor(style.r, style.g, style.b, glowAlpha[i])
-        end
-        glow:Show()
-    end
 end
 function ME.RemovePlate(unit)
     ME.units[unit] = nil
     if badges[unit] then badges[unit]:Hide() end
-    if glows[unit] then glows[unit]:Hide() end
 end
 function ME.UpdateTarget()
     -- Targeting can still record/announce an encounter, but never creates a

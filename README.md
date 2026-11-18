@@ -41,7 +41,6 @@ Type `/mortal preview` to preview the encounter alert without adding anyone.
 | `/mortal add enemy First Last [note]` | Manually add an enemy |
 | `/mortal add rival First Last [note]` | Manually add a rival |
 | `/mortal badges [rival\|enemy]` | Toggle badges for one status or both |
-| `/mortal glow [rival\|enemy]` | Toggle nameplate glow for one status or both |
 | `/mortal tooltip [rival\|enemy]` | Toggle tooltip details for one status or both |
 | `/mortal alerts` | Toggle encounter banners and chat alerts |
 | `/mortal sound` | Toggle alert sounds |
@@ -64,13 +63,10 @@ one status independently, using amber for rivals and red for mortal enemies:
 - **Badge:** a compact sword/skull icon just left of the visible health bar.
   On name-only plates it sits to the left of the player's name.
   Targeting the player does not create a second badge elsewhere on screen.
-- **Glow:** a subtle, layered outline fitted to the visible health bar. It uses
-  addon-owned borders and does not recolor or replace the underlying health bar.
-  On name-only plates with a hidden health bar, no outline is drawn.
 - **Tooltip:** adds your relationship to the normal player mouseover tooltip.
 - **Note:** include the personal note in the tooltip, or show only the relationship.
 
-All four options start enabled for each status. An existing disabled badge
+All three options start enabled for each status. An existing disabled badge
 preference stays disabled when upgrading. Settings are saved per character.
 Changes apply to currently recognized nameplates and an open player tooltip;
 removing a saved player also clears their tooltip annotation. Switching the
@@ -79,7 +75,7 @@ Encounter alerts and sounds remain separately configurable below the matrix.
 
 Nameplates must be enabled in WoW. A tooltip can still work without nameplates
 when the hovered player's identity is accessible. Third-party nameplate layouts
-may affect the outline's placement; visual compatibility needs live testing.
+may affect the icon's placement; visual compatibility needs live testing.
 
 ## Recognition and data
 
@@ -132,10 +128,10 @@ them untargeted but their nameplate visible, and during combat. The output repor
 - [ ] Repeat outside combat and during open-world PvP; capture diagnostics if restricted.
 - [ ] Notes/status survive `/reload` and a full logout/login.
 - [ ] Recycled nameplates do not display a previous player's badge.
-- [ ] Toggle Badge, Glow, and Tooltip separately in each relationship row.
+- [ ] Toggle Badge and Tooltip separately in each relationship row.
 - [ ] Badge is icon-only, left of the bar; Note hides only the tooltip note.
 - [ ] Rival settings do not change enemy settings, and vice versa.
-- [ ] Removing an entry clears its badge, glow, and open tooltip annotation.
+- [ ] Removing an entry clears its badge and open tooltip annotation.
 - [ ] Hover players, then NPCs/items: no stale or duplicate relationship lines.
 - [ ] Tooltip details update after editing notes/status while it is open.
 - [ ] Repeated target changes do not spam encounter alerts.
@@ -154,6 +150,6 @@ The standalone simulated client covers initialization, player/NPC/self filtering
 Forever first/surname handling, current-realm filtering, GUID matching,
 character isolation, restricted and failing API reads, CRUD commands, nameplate
 reuse, forbidden plates, world transitions, encounter cooldowns, window actions,
-independent display settings, glow cleanup, and tooltip annotation/rebuilds,
+independent display settings and tooltip annotation/rebuilds,
 and saved-data preservation. It cannot verify rendering, protected-frame rules,
 or live PvP identity availability. Tests are not loaded by the addon's TOC.

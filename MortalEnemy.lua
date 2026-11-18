@@ -7,7 +7,7 @@ local function Help()
     ME.Print("/mortal note <text> — update your target's note; omit text to clear.")
     ME.Print("/mortal remove [First Last] — remove a named player or your target.")
     ME.Print("/mortal add rival|enemy First Last [note] — add manually.")
-    ME.Print("/mortal badges|glow|tooltip [rival|enemy] — toggle a display; /mortal alerts|sound.")
+    ME.Print("/mortal badges|tooltip [rival|enemy] — toggle a display; /mortal alerts|sound.")
     ME.Print("/mortal preview — sample alert; /mortal diagnose — identity availability.")
 end
 local function Command(message)
@@ -19,7 +19,7 @@ local function Command(message)
     elseif command == "help" then Help()
     elseif command == "preview" then ME.Preview()
     elseif command == "diagnose" then ME.Diagnose()
-    elseif command == "badges" or command == "glow" or command == "tooltip" then
+    elseif command == "badges" or command == "tooltip" then
         if rest ~= "" and not ME.styles[rest] then ME.Print("Choose rival or enemy, or omit to toggle both."); return end
         local key = command == "badges" and "badge" or command
         local statuses = rest ~= "" and { rest } or { "rival", "enemy" }
