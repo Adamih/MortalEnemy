@@ -1,6 +1,10 @@
 ## Interface: 16001
 ## Title: Mortal Enemy
-## Notes: Minimal load test for WoW Forever.
-## Version: 0.0.1
+## Notes: Remember rivals and mortal enemies. Recognize them when you meet again.
+## Version: 0.1.0
+## SavedVariables: MortalEnemyDB
 
+Core.lua
+Display.lua
+Window.lua
 MortalEnemy.lua
