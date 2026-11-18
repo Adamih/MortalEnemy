@@ -1,7 +1,7 @@
 local _, ME = ...
 local window, selectedKey
 local filter, query = "all", ""
-local rowHeight, listHeight = 48, 374
+local rowHeight, listHeight = 48, 294
 local function Button(parent, text, width, x, y, callback)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
@@ -72,7 +72,11 @@ function ME.RefreshWindow()
         row.icon:SetTexture(style.icon)
         row.name:SetText(entry.name)
         row.name:SetTextColor(style.r, style.g, style.b)
-        row.detail:SetText(style.label)
+        local summary = {}
+        if entry.level then summary[#summary + 1] = tostring(entry.level) end
+        if entry.race then summary[#summary + 1] = entry.race end
+        if entry.class then summary[#summary + 1] = entry.class end
+        row.detail:SetText(#summary > 0 and table.concat(summary, " • ") or "Character details unknown")
         row.selected:SetShown(selectedKey == item.key)
         row:Show()
     end
@@ -95,31 +99,38 @@ function ME.RefreshWindow()
     local faction = entry and entry.faction
     window.factionIcon:SetShown(faction == "Horde" or faction == "Alliance")
     if faction == "Horde" or faction == "Alliance" then
-        window.factionIcon:SetTexture("Interface\\TargetingFrame\\UI-PVP-" .. faction)
+        window.factionIcon:SetTexture("Interface\\PVPFrame\\PVP-Currency-" .. faction)
     end
     window.characterInfo:SetText(entry and ((entry.level and ("Level " .. entry.level) or "Level unknown")
         .. " • " .. (entry.race or "Race unknown") .. " • " .. (entry.class or "Class unknown")) or "")
-    local observed = {}
-    if entry then
-        for _, field in ipairs({ "level", "race", "class", "faction" }) do
-            local stamp = entry[field .. "ObservedAt"]
-            if stamp then
-                observed[#observed + 1] = field:sub(1, 1):upper() .. field:sub(2) .. " observed: " .. date("%d %b %Y, %H:%M", stamp)
-            end
-        end
-    end
-    window.characterUpdated:SetText(entry and (#observed > 0 and table.concat(observed, "\n")
+    window.characterUpdated:SetText(entry and (entry.characterUpdatedAt
+        and ("Details updated " .. date("%d %b %Y, %H:%M", entry.characterUpdatedAt))
         or "Target this player to record their character details.") or "")
     window.lastSeen:SetText(entry and (entry.lastSeen
         and ("Last seen: " .. date("%d %b %Y, %H:%M", entry.lastSeen) .. "\n" .. (entry.lastZone or "Unknown zone"))
         or "Last seen: not yet recorded") or "")
     window.added:SetText(entry and entry.added and ("Remembered since " .. date("%d %b %Y", entry.added)) or "")
-    if window.editingKey ~= selectedKey or not window.note:HasFocus() then
-        window.note:SetText(entry and entry.note or "")
+    local savedNote = entry and entry.note or ""
+    if window.editingKey ~= selectedKey or window.note:GetText() == (window.noteBaseline or "") then
+        window.noteBaseline = savedNote
+        window.note:SetText(savedNote)
         window.editingKey = selectedKey
     end
     for _, button in ipairs(window.editButtons) do button:SetEnabled(entry ~= nil) end
+    for status, check in pairs(window.relationshipChecks) do
+        check:SetEnabled(entry ~= nil)
+        check:SetChecked(entry ~= nil and entry.status == status)
+    end
+    ME.UpdateNoteState()
     ME.RefreshTargetStrip()
+end
+function ME.UpdateNoteState()
+    if not window or not window.note then return end
+    local entry = selectedKey and ME.db.entries[selectedKey]
+    local text = window.note:GetText()
+    window.noteHint:SetShown(text == "" and not window.note:HasFocus())
+    window.noteCount:SetText(ME.NoteLength(text) .. " / " .. ME.NoteLimit)
+    window.saveNote:SetEnabled(entry ~= nil and ME.Note(text) ~= (entry.note or ""))
 end
 function ME.RefreshTargetStrip()
     if not window or not window:IsShown() then return end
@@ -130,7 +141,7 @@ function ME.RefreshTargetStrip()
 end
 local function CreateWindow()
     window = CreateFrame("Frame", "MortalEnemyWindow", UIParent, "PortraitFrameTemplate")
-    window:SetSize(780, 650)
+    window:SetSize(780, 570)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -168,10 +179,10 @@ local function CreateWindow()
     }
     local listInset = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
     listInset:SetPoint("TOPLEFT", 20, -170)
-    listInset:SetSize(304, 458)
+    listInset:SetSize(304, 378)
     local detailInset = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
     detailInset:SetPoint("TOPLEFT", 338, -170)
-    detailInset:SetSize(422, 458)
+    detailInset:SetSize(422, 378)
     window.search = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
     window.search:SetFrameLevel(window:GetFrameLevel() + 4)
     window.search:SetSize(278, 24)
@@ -214,58 +225,74 @@ local function CreateWindow()
     window.listScroll:SetScript("OnMouseWheel", function(_, delta) ScrollList((window.scrollOffset or 0) - delta * rowHeight) end)
     window.empty = Label("", "GameFontHighlightSmall", 38, -260, 240)
     window.detailIcon = window.Content:CreateTexture(nil, "ARTWORK")
-    window.detailIcon:SetSize(36, 36)
+    window.detailIcon:SetSize(44, 44)
     window.detailIcon:SetPoint("TOPLEFT", 354, -188)
     window.factionIcon = window.Content:CreateTexture(nil, "ARTWORK")
-    window.factionIcon:SetSize(26, 28)
-    window.factionIcon:SetPoint("TOPLEFT", 722, -188)
-    window.selection = Label("", "GameFontNormalLarge", 400, -188, 310)
+    window.factionIcon:SetSize(32, 32)
+    window.factionIcon:SetPoint("TOPLEFT", 718, -190)
+    window.selection = Label("", "GameFontNormalLarge", 410, -188, 294)
     window.selection:SetWordWrap(false)
-    window.status = Label("", "GameFontHighlight", 400, -215, 342)
+    window.status = Label("", "GameFontHighlight", 410, -215, 294)
     window.characterInfo = Label("", "GameFontHighlight", 354, -249, 386)
     window.characterInfo:SetWordWrap(false)
-    window.characterUpdated = Label("", "GameFontDisableSmall", 354, -271, 386)
-    window.lastSeen = Label("", "GameFontHighlightSmall", 354, -326, 386)
-    window.added = Label("", "GameFontDisableSmall", 354, -364, 386)
-    Label("Your grudge", "GameFontNormal", 354, -397)
-    local noteInset = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
-    noteInset:SetPoint("TOPLEFT", 350, -419)
-    noteInset:SetSize(394, 108)
-    window.note = CreateFrame("EditBox", nil, window)
+    window.characterUpdated = Label("", "GameFontHighlightSmall", 354, -274, 386)
+    window.lastSeen = Label("", "GameFontHighlightSmall", 354, -303, 386)
+    window.added = Label("", "GameFontDisableSmall", 354, -341, 386)
+    Label("Your grudge", "GameFontNormal", 354, -374)
+    window.noteCount = Label("", "GameFontDisableSmall", 650, -374, 92)
+    window.noteCount:SetJustifyH("RIGHT")
+    window.note = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
     window.note:SetFrameLevel(window:GetFrameLevel() + 4)
-    window.note:SetSize(378, 92)
-    window.note:SetPoint("TOPLEFT", 358, -427)
-    window.note:SetFontObject("ChatFontNormal")
-    window.note:SetTextColor(0.95, 0.9, 0.8)
-    window.note:SetMultiLine(true)
+    window.note:SetSize(378, 26)
+    window.note:SetPoint("TOPLEFT", 358, -396)
     window.note:SetAutoFocus(false)
-    window.note:SetMaxLetters(240)
+    window.note:SetMaxLetters(ME.NoteLimit)
+    window.noteHint = window.note:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    window.noteHint:SetPoint("LEFT", 6, 0)
+    window.noteHint:SetText("Why is this person in your book?")
+    window.note:SetScript("OnTextChanged", ME.UpdateNoteState)
+    window.note:SetScript("OnEditFocusGained", ME.UpdateNoteState)
+    window.note:SetScript("OnEditFocusLost", ME.UpdateNoteState)
     window.note:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local function SaveNote()
         local entry = selectedKey and ME.db.entries[selectedKey]
         if entry then
             entry.note = ME.Note(window.note:GetText())
+            window.noteBaseline = entry.note
+            window.note:SetText(entry.note)
             window.note:ClearFocus()
             ME.Print("Note saved.")
             ME.Changed()
         end
     end
     window.note:SetScript("OnEnterPressed", SaveNote)
+    window.saveNote = Button(window, "Save note", 120, 354, -432, SaveNote)
     window.editButtons = {
-        Button(window, "Save note", 120, 354, -537, SaveNote),
-        Button(window, "Remove", 120, 622, -537, function() if selectedKey then ME.Remove(selectedKey) end end),
-        Button(window, "Rival", 150, 354, -575, function()
-            if selectedKey and ME.db.entries[selectedKey] then ME.db.entries[selectedKey].status = "rival"; ME.Changed() end
-        end),
-        Button(window, "Mortal Enemy", 182, 512, -575, function()
-            if selectedKey and ME.db.entries[selectedKey] then ME.db.entries[selectedKey].status = "enemy"; ME.Changed() end
-        end),
+        window.saveNote,
+        Button(window, "Forgive", 92, 650, -522, function() if selectedKey then ME.ConfirmForgive(selectedKey) end end),
     }
+    Label("Relationship", "GameFontNormal", 354, -474)
+    window.relationshipChecks = {}
+    for i, status in ipairs({ "rival", "enemy" }) do
+        local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
+        check:SetPoint("TOPLEFT", 354 + (i - 1) * 166, -493)
+        check:SetFrameLevel(window:GetFrameLevel() + 4)
+        local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        label:SetPoint("LEFT", check, "RIGHT", 0, 0)
+        label:SetText(ME.styles[status].label)
+        check:SetScript("OnClick", function()
+            if selectedKey and ME.db.entries[selectedKey] then
+                ME.db.entries[selectedKey].status = status
+                ME.Changed()
+            end
+        end)
+        window.relationshipChecks[status] = check
+    end
     window.filterTabs = {}
     for i, item in ipairs({ { "all", "All" }, { "rival", "Rivals" }, { "enemy", "Enemies" } }) do
         local tab = CreateFrame("Button", nil, window, "PanelTabButtonTemplate")
         tab:SetText(item[2])
-        tab:SetPoint("TOPLEFT", 24 + (i - 1) * 104, -645)
+        tab:SetPoint("TOPLEFT", 24 + (i - 1) * 104, -565)
         PanelTemplates_TabResize(tab, 0, 96)
         tab:SetScript("OnClick", function()
             filter = item[1]
@@ -327,7 +354,7 @@ function ME.ShowAddPlayer()
         end
         addDialog.first = Edit("First name", 164, 20, -58, 48)
         addDialog.last = Edit("Last name", 164, 208, -58, 48)
-        addDialog.note = Edit("Note (optional)", 352, 20, -128, 240)
+        addDialog.note = Edit("Short note (optional)", 352, 20, -128, ME.NoteLimit)
         addDialog.first:SetScript("OnTabPressed", function() addDialog.last:SetFocus() end)
         addDialog.last:SetScript("OnTabPressed", function() addDialog.note:SetFocus() end)
         addDialog.error = Label("", 20, -194)
@@ -508,4 +535,22 @@ function ME.InitMinimap()
     end)
     MinimapPosition()
     ME.UpdateMinimap()
+end
+
+StaticPopupDialogs["MORTALENEMY_FORGIVE"] = {
+    text = "Are you sure you want to forgive %s?",
+    button1 = "Forgive",
+    button2 = CANCEL or "Cancel",
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    OnAccept = function(self, data)
+        data = data or self.data
+        if data and ME.db == data.db and ME.db.entries[data.key] == data.entry then ME.Remove(data.key) end
+    end,
+}
+function ME.ConfirmForgive(key)
+    local entry = ME.db.entries[key]
+    if not entry then return end
+    StaticPopup_Show("MORTALENEMY_FORGIVE", entry.name, nil, { key = key, entry = entry, db = ME.db })
 end

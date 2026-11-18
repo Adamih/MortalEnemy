@@ -173,11 +173,25 @@ Settings = {
 }
 function HideUIPanel(panel) panel:Hide() end
 function InCombatLockdown() return false end
+local pendingPopup
+StaticPopupDialogs = {}
+function StaticPopup_Show(which, name, _, data)
+    pendingPopup = { which = which, text = StaticPopupDialogs[which].text:format(name), data = data }
+    return pendingPopup
+end
 local ME = {}
 for _, file in ipairs({"Core.lua", "Display.lua", "Window.lua", "MortalEnemy.lua"}) do assert(loadfile(file))("MortalEnemy", ME) end
 local controller = frames[#frames]
 local function event(name, unit) controller.scripts.OnEvent(controller, name, unit) end
-local function command(text) SlashCmdList.MORTALENEMY(text) end
+local function command(text)
+    SlashCmdList.MORTALENEMY(text)
+    -- Existing removal scenarios exercise the accept path; dedicated tests
+    -- below verify that cancellation and opening alone never delete an entry.
+    if text:match("^remove") and pendingPopup then
+        StaticPopupDialogs[pendingPopup.which].OnAccept(pendingPopup, pendingPopup.data)
+        pendingPopup = nil
+    end
+end
 local function check(value, message) assert(value, message) end
 local function player(name, realm, guid) return { player = true, name = name, realm = realm, guid = guid } end
 
@@ -418,9 +432,9 @@ command("badges")
 check(not badge:IsShown(), "disable badges hides existing")
 command("preview")
 check(not ME.db.entries["bob stone"], "remove named player")
-check(#ME.Note(string.rep("a", 241)) == 240, "ASCII note limit")
-check(ME.Note(string.rep("a", 239) .. "é") == string.rep("a", 239), "UTF-8 note truncation")
-check(#ME.Note(string.rep("é", 121)) == 240, "UTF-8 boundary at limit")
+check(#ME.Note(string.rep("a", 241)) == 100, "ASCII note limit")
+check(ME.Note(string.rep("a", 99) .. "é" .. "x") == string.rep("a", 99) .. "é", "UTF-8 note truncation")
+check(#ME.Note(string.rep("é", 121)) == 200, "UTF-8 boundary at limit")
 -- Preserve the old badge preference when initializing the new display options.
 local configuredDisplay = ME.db.settings.display
 ME.db.settings.display = nil
@@ -544,26 +558,24 @@ local profileEntry = ME.db.entries["profile example"]
 check(profileEntry.class == "Warlock" and profileEntry.race == "Human" and profileEntry.level == 20,
     "mark target captures class race and level")
 ME.SelectEntry("profile example")
-check(book.characterInfo:GetText() == "Level 20 • Human • Warlock" and book.characterUpdated:GetText():find("Race observed:", 1, true),
-    "detail pane displays snapshot and field observation dates")
-local previousStamp = profileEntry.levelObservedAt
+check(book.characterInfo:GetText() == "Level 20 • Human • Warlock" and book.characterUpdated:GetText():find("Details updated", 1, true),
+    "detail pane displays snapshot and a single update date")
+local previousStamp = profileEntry.characterUpdatedAt
 now = now + 10
 profileTarget.level = 27
 event("PLAYER_TARGET_CHANGED")
-check(profileEntry.level == 27 and profileEntry.levelObservedAt > previousStamp
+check(profileEntry.level == 27 and profileEntry.characterUpdatedAt > previousStamp
     and book.characterInfo:GetText():find("Level 27", 1, true), "retarget updates saved level and visible details")
-local levelStamp, raceStamp, classStamp = profileEntry.levelObservedAt, profileEntry.raceObservedAt, profileEntry.classObservedAt
+local oldStamp = profileEntry.characterUpdatedAt
 now = now + 10
 profileTarget.level, profileTarget.race, profileTarget.class = secret, secret, secret
 event("PLAYER_TARGET_CHANGED")
 check(profileEntry.level == 27 and profileEntry.race == "Human" and profileEntry.class == "Warlock"
-    and profileEntry.levelObservedAt == levelStamp and profileEntry.raceObservedAt == raceStamp
-    and profileEntry.classObservedAt == classStamp, "restricted fields preserve last values and their original timestamps")
+    and profileEntry.characterUpdatedAt == oldStamp, "fully restricted reads preserve values and update date")
 profileTarget.level, profileTarget.race, profileTarget.class = -1, nil, "Mage"
 event("PLAYER_TARGET_CHANGED")
-check(profileEntry.class == "Mage" and profileEntry.classObservedAt > classStamp
-    and profileEntry.level == 27 and profileEntry.levelObservedAt == levelStamp
-    and profileEntry.raceObservedAt == raceStamp, "partial update preserves unavailable fields and dates")
+check(profileEntry.class == "Mage" and profileEntry.characterUpdatedAt > oldStamp
+    and profileEntry.level == 27 and profileEntry.race == "Human", "partial update preserves missing values with one snapshot date")
 profileTarget.level = 28
 event("UNIT_LEVEL", "target")
 check(profileEntry.level == 28, "level event refreshes current target")
@@ -599,17 +611,17 @@ now = now + 10
 event("PLAYER_TARGET_CHANGED")
 ME.SelectEntry("profile example")
 check(book.detailIcon.texture == "Interface\\Icons\\ClassIcon_WARLOCK", "detail header uses class icon")
-check(book.factionIcon:IsShown() and book.factionIcon.texture == "Interface\\TargetingFrame\\UI-PVP-Horde", "detail header displays Horde emblem")
+check(book.factionIcon:IsShown() and book.factionIcon.texture == "Interface\\PVPFrame\\PVP-Currency-Horde", "detail header displays Horde emblem")
 check(profileEntry.classFile == "WARLOCK" and profileEntry.faction == "Horde", "class token and faction saved")
-local factionStamp = profileEntry.factionObservedAt
+local factionStamp = profileEntry.characterUpdatedAt
 profileTarget.classFile, profileTarget.faction = secret, secret
 now = now + 10
 event("PLAYER_TARGET_CHANGED")
-check(profileEntry.classFile == "WARLOCK" and profileEntry.faction == "Horde" and profileEntry.factionObservedAt == factionStamp,
+check(profileEntry.classFile == "WARLOCK" and profileEntry.faction == "Horde" and profileEntry.characterUpdatedAt > factionStamp,
     "restricted class token and faction preserve previous snapshots")
 profileTarget.classFile, profileTarget.faction = "MAGE", "Alliance"
 event("PLAYER_TARGET_CHANGED")
-check(book.detailIcon.texture == "Interface\\Icons\\ClassIcon_MAGE" and book.factionIcon.texture == "Interface\\TargetingFrame\\UI-PVP-Alliance",
+check(book.detailIcon.texture == "Interface\\Icons\\ClassIcon_MAGE" and book.factionIcon.texture == "Interface\\PVPFrame\\PVP-Currency-Alliance",
     "header icons update with newly observed class and faction")
 for _, row in ipairs(book.rows) do
     if row.key == "profile example" then check(row.icon.texture == ME.styles.enemy.icon, "list relationship icon remains unchanged") end
@@ -617,4 +629,39 @@ end
 ME.SelectEntry("extra person9")
 check(book.detailIcon.texture == "Interface\\Icons\\INV_Misc_QuestionMark" and not book.factionIcon:IsShown(), "unknown class and faction have neutral fallback without stale emblem")
 check(ME.ClassToken({class = "Warlock"}) == "WARLOCK", "existing localized class records resolve icon before next encounter")
+ME.SelectEntry("profile example")
+check(not book.saveNote.enabled, "unchanged note cannot be saved again")
+book.note:SetText("A new short grudge")
+check(book.saveNote.enabled, "editing a note enables save")
+now = now + 6
+ME.UpdateTarget()
+check(book.note:GetText() == "A new short grudge", "background character refresh preserves unsaved note draft")
+book.saveNote.scripts.OnClick(book.saveNote)
+check(not book.saveNote.enabled and profileEntry.note == "A new short grudge", "saving clears dirty state")
+check(book.relationshipChecks.enemy:GetChecked() and not book.relationshipChecks.rival:GetChecked(), "current relationship visibly selected")
+book.relationshipChecks.rival.scripts.OnClick(book.relationshipChecks.rival)
+check(profileEntry.status == "rival" and book.relationshipChecks.rival:GetChecked()
+    and not book.relationshipChecks.enemy:GetChecked(), "relationship selection is exclusive")
+book.editButtons[2].scripts.OnClick(book.editButtons[2])
+check(pendingPopup and pendingPopup.text == "Are you sure you want to forgive Profile Example?"
+    and ME.db.entries["profile example"] == profileEntry, "forgive requires named confirmation")
+pendingPopup = nil -- Cancel/Escape: no accept callback.
+check(ME.db.entries["profile example"] == profileEntry, "cancel leaves entry unchanged")
+book.editButtons[2].scripts.OnClick(book.editButtons[2])
+ME.SelectEntry("manual example")
+StaticPopupDialogs[pendingPopup.which].OnAccept(pendingPopup, pendingPopup.data)
+check(not ME.db.entries["profile example"] and ME.db.entries["manual example"], "confirmation forgives original player even after selection changes")
+pendingPopup = nil
+SlashCmdList.MORTALENEMY("forgive Manual Example")
+check(pendingPopup and ME.db.entries["manual example"], "forgive command also asks for confirmation")
+StaticPopupDialogs[pendingPopup.which].OnAccept(pendingPopup, pendingPopup.data)
+check(not ME.db.entries["manual example"], "confirmed command forgives player")
+pendingPopup = nil
+local migrated = ME.db.entries["menu example"]
+migrated.classObservedAt, migrated.levelObservedAt = 1000, 2000
+migrated.characterUpdatedAt = nil
+ME.InitDB()
+check(migrated.characterUpdatedAt == 2000 and not migrated.classObservedAt and not migrated.levelObservedAt,
+    "legacy field dates migrate into one date and are removed")
+check(ME.Note("One\nshort\tgrudge") == "One short grudge", "notes stay single-line")
 io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, settings category, target strip, player menus, add-by-name form, per-character persistence, current-realm enforcement\n")

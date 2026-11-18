@@ -13,17 +13,26 @@ function ME.Read(func, ...)
     return value
 end
 function ME.Trim(value) return (value or ""):match("^%s*(.-)%s*$") end
-function ME.Note(value)
-    local text = ME.Trim(value)
-    if #text <= 240 then return text end
-    -- Keep a truncated UTF-8 note from ending halfway through a character.
-    local boundary = 241
-    while boundary > 1 do
-        local byte = text:byte(boundary)
-        if byte < 128 or byte >= 192 then break end
-        boundary = boundary - 1
+ME.NoteLimit = 100
+function ME.NoteLength(text)
+    local count = 0
+    for i = 1, #text do
+        local byte = text:byte(i)
+        if byte < 128 or byte >= 192 then count = count + 1 end
     end
-    return text:sub(1, boundary - 1)
+    return count
+end
+function ME.Note(value)
+    local text = ME.Trim(value):gsub("%s+", " ")
+    local count = 0
+    for i = 1, #text do
+        local byte = text:byte(i)
+        if byte < 128 or byte >= 192 then
+            count = count + 1
+            if count > ME.NoteLimit then return text:sub(1, i - 1) end
+        end
+    end
+    return text
 end
 function ME.Key(name)
     if type(name) ~= "string" or name:find("[%c%-]") then return nil end
@@ -70,21 +79,20 @@ function ME.InitDB()
             if type(entry.guid) ~= "string" then entry.guid = nil end
             if type(entry.lastSeen) ~= "number" then entry.lastSeen = nil end
             if type(entry.lastZone) ~= "string" then entry.lastZone = nil end
-            if type(entry.classFile) ~= "string" or not entry.classFile:match("^[A-Z]+$") then
-                entry.classFile, entry.classFileObservedAt = nil, nil
-            end
-            if entry.faction ~= "Horde" and entry.faction ~= "Alliance" and entry.faction ~= "Neutral" then
-                entry.faction, entry.factionObservedAt = nil, nil
-            end
+            local updated = entry.characterUpdatedAt
+            if type(updated) ~= "number" or updated ~= updated or updated <= 0 or updated == math.huge then updated = nil end
             for _, field in ipairs({ "class", "race", "level", "classFile", "faction" }) do
-                local valid = field == "level" and type(entry[field]) == "number" and entry[field] > 0
-                    and entry[field] < math.huge and entry[field] % 1 == 0
-                    or field ~= "level" and type(entry[field]) == "string" and entry[field] ~= ""
-                local stamp = field .. "ObservedAt"
-                if not valid then entry[field], entry[stamp] = nil, nil end
-                if type(entry[stamp]) ~= "number" or entry[stamp] ~= entry[stamp]
-                    or entry[stamp] == math.huge or entry[stamp] == -math.huge then entry[stamp] = nil end
+                local stamp = entry[field .. "ObservedAt"]
+                if type(stamp) == "number" and stamp > 0 and stamp < math.huge then updated = math.max(updated or 0, stamp) end
+                entry[field .. "ObservedAt"] = nil
+                local value = entry[field]
+                local valid = field == "level" and type(value) == "number" and value > 0 and value < math.huge and value % 1 == 0
+                    or field ~= "level" and type(value) == "string" and value ~= ""
+                if not valid then entry[field] = nil end
             end
+            if entry.classFile and not entry.classFile:match("^[A-Z]+$") then entry.classFile = nil end
+            if entry.faction ~= "Horde" and entry.faction ~= "Alliance" and entry.faction ~= "Neutral" then entry.faction = nil end
+            entry.characterUpdatedAt = updated
         end
     end
 end
@@ -138,36 +146,40 @@ function ME.ClassToken(entry)
 end
 local characterRefresh = {}
 function ME.ReadCharacterInfo(unit)
-    local info, observed = {}, time()
+    local info = { observedAt = time() }
     for key, api in pairs({ class = UnitClass, race = UnitRace }) do
         local value = ME.Read(api, unit)
         if type(value) == "string" and value ~= "" and value ~= UNKNOWN and value ~= UNKNOWNOBJECT then
-            info[key], info[key .. "ObservedAt"] = value, observed
+            info[key] = value
         end
     end
     local ok, _, classFile = pcall(UnitClass, unit)
     if ok and not ME.IsSecret(classFile) and type(classFile) == "string" and classFile:match("^[A-Z]+$") then
-        info.classFile, info.classFileObservedAt = classFile, observed
+        info.classFile = classFile
     end
     local faction = ME.Read(UnitFactionGroup, unit)
     if faction == "Horde" or faction == "Alliance" or faction == "Neutral" then
-        info.faction, info.factionObservedAt = faction, observed
+        info.faction = faction
     end
     local level = ME.Read(UnitLevel, unit)
     if type(level) == "number" and level > 0 and level < math.huge and level % 1 == 0 then
-        info.level, info.levelObservedAt = level, observed
+        info.level = level
     end
     return info
 end
 function ME.ApplyCharacterInfo(entry, info)
-    if type(info) ~= "table" then return false end
-    local changed = false
+    if type(info) ~= "table" or not info.observedAt then return false end
+    if entry.characterUpdatedAt and info.observedAt < entry.characterUpdatedAt then return false end
+    local changed, readable = false, false
     for _, key in ipairs({ "class", "race", "level", "classFile", "faction" }) do
-        local stamp = key .. "ObservedAt"
-        if info[key] ~= nil and info[stamp] and (not entry[stamp] or info[stamp] >= entry[stamp]) then
-            if entry[key] ~= info[key] or entry[stamp] ~= info[stamp] then changed = true end
-            entry[key], entry[stamp] = info[key], info[stamp]
+        if info[key] ~= nil then
+            readable = true
+            if entry[key] ~= info[key] then changed = true end
+            entry[key] = info[key]
         end
+    end
+    if readable and entry.characterUpdatedAt ~= info.observedAt then
+        entry.characterUpdatedAt, changed = info.observedAt, true
     end
     return changed
 end
@@ -226,7 +238,7 @@ function ME.Remove(key)
     local entry = ME.db.entries[key]
     if not entry then return end
     ME.db.entries[key] = nil
-    ME.Print("Removed " .. entry.name .. ".")
+    ME.Print("Forgave " .. entry.name .. ".")
     ME.Changed()
 end
 function ME.Entries()

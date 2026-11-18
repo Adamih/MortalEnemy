@@ -5,7 +5,7 @@ local function Help()
     ME.Print("/mortal — open your book of rivals.")
     ME.Print("/mortal rival [note] or enemy [note] — mark your target.")
     ME.Print("/mortal note <text> — update your target's note; omit text to clear.")
-    ME.Print("/mortal remove [First Last] — remove a named player or your target.")
+    ME.Print("/mortal forgive [First Last] — forgive a named player or your target.")
     ME.Print("/mortal add rival|enemy First Last [note] — add manually.")
     ME.Print("/mortal badges|tooltip [rival|enemy] — toggle a display; /mortal alerts|sound.")
     ME.Print("/mortal preview — sample alert; /mortal diagnose — identity availability.")
@@ -41,7 +41,7 @@ local function Command(message)
         entry.note = ME.Note(rest)
         ME.Print("Note saved.")
         ME.Changed()
-    elseif command == "remove" then
+    elseif command == "remove" or command == "forgive" then
         local key
         if rest ~= "" then
             key = ME.Key(rest)
@@ -49,8 +49,8 @@ local function Command(message)
             local entry
             entry, key = ME.Find(ME.Identity("target"))
         end
-        if key and ME.db.entries[key] then ME.Remove(key)
-        else ME.Print("No match. Target a saved player or use /mortal remove First Last.") end
+        if key and ME.db.entries[key] then ME.ConfirmForgive(key)
+        else ME.Print("No match. Target a saved player or use /mortal forgive First Last.") end
     elseif command == "add" then
         local status, name, note = rest:match('^(%S+)%s+"([^"]+)"%s*(.-)$')
         if not status then

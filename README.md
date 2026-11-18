@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.6.1 targets interface 16001.
+The other player does not need the addon. Version 0.7.0 targets interface 16001.
 
 ## First run
 
@@ -23,7 +23,7 @@ The addon is already installed when this folder is at
    their health bar. There is no separate persistent status badge at the top of
    the screen.
 
-The book lets you select an entry, edit its note, change its status, and remove it.
+The book lets you select an entry, edit its note, change its status, and forgive them.
 Click **Settings** to open the addon preferences in WoW's Settings → AddOns →
 Mortal Enemy page. Preferences remain separate for rivals and mortal enemies.
 The book is draggable and closes with Escape.
@@ -42,15 +42,16 @@ standard title/close controls, native inset panels, and All / Rivals / Enemies t
 The left pane is a scrollable list; use the mouse wheel or drag the scrollbar.
 Search matches full names and personal notes, combined with the active tab.
 The right pane shows the selected player's relationship, last recorded sighting,
-date added, and an editable grudge. Save the note or change/remove their relationship
+date added, and a short grudge. Save the note, change their relationship, or forgive them
 from that pane. Adding a player clears search/filters and scrolls to their entry.
 The target strip remains above both panes, and Add player uses matching native
 window chrome. Settings stay on WoW's separate AddOns preferences page.
 
 ## Character information
 
-The detail pane shows the last recorded **level, race, and class**, with a separate
-observation time for each field. Its header uses a class icon plus a Horde or
+The detail pane shows the last recorded **level, race, and class**, with one
+**Details updated** timestamp. Older per-field observation dates are merged into
+the most recent date and removed from saved data. Its header uses a class icon plus a Horde or
 Alliance emblem when faction has been observed. A question mark represents an
 unknown class; an unknown or neutral faction has no emblem. Rival/enemy icons in
 the list, nameplates, and encounter alerts keep their existing appearance. Unknown fields stay labelled unknown until the
@@ -65,7 +66,8 @@ Targeting a saved player refreshes the snapshot immediately. The addon retries
 every five seconds while they remain targeted and responds to target level/name
 updates. This works without an available nameplate when the target's identity is
 readable. Missing, restricted, invalid, or unknown fields never erase the previous
-values or advance those fields' observation dates. Personal notes and relationship
+values. The single update date advances when at least one character field is
+readable; a completely unavailable snapshot keeps the previous date. Personal notes and relationship
 status are not changed by these updates. There is no background lookup of offline
 players or character-data polling of arbitrary nearby units.
 
@@ -96,8 +98,8 @@ previews and display controls live on the actual WoW addon settings page.
 | `/mortal rival [note]` | Mark the targeted player as a rival |
 | `/mortal enemy [note]` | Mark the targeted player as a mortal enemy |
 | `/mortal note <text>` | Update the saved target's note; omit text to clear |
-| `/mortal remove` | Remove the targeted saved player |
-| `/mortal remove First Last` | Remove an entry by name |
+| `/mortal forgive` | Ask to forgive the targeted saved player |
+| `/mortal forgive First Last` | Ask to forgive an entry by name |
 | `/mortal add enemy First Last [note]` | Manually add an enemy |
 | `/mortal add rival First Last [note]` | Manually add a rival |
 | `/mortal badges [rival\|enemy]` | Toggle badges for one status or both |
@@ -112,8 +114,17 @@ Only players on your current realm can be added or recognized. Commands take a
 complete first and last name; realm suffixes are not accepted. For example,
 `/mortal add enemy Bram Redfen Killed me while fishing`. Quoted names work too:
 `/mortal add rival "Bram Redfen" A worthy opponent`.
-Notes are limited to 240 bytes when saved. Marking the same player again keeps
+New or edited notes are single-line and limited to 100 UTF-8 characters so they
+stay short in tooltips. The note field includes a prompt and character count;
+Save note is enabled only when the note has changed. Existing longer notes stay
+in saved data until edited and saved again. Marking the same player again keeps
 their note unless you provide a replacement.
+
+The Relationship choices show the current selection and are mutually exclusive.
+**Forgive** is separated from note editing and always asks:
+“Are you sure you want to forgive NAME?” Choose Forgive to delete that entry, or
+Cancel/Escape to keep it. `/mortal remove` remains a compatibility alias and also
+requires confirmation.
 
 ## Open-world display options
 
@@ -186,8 +197,10 @@ them untargeted but their nameplate visible, and during combat. The output repor
 - [ ] Native portrait frame, inset panes, and tabs render correctly.
 - [ ] List scrolls with the wheel/scrollbar; search and status tabs combine.
 - [ ] Selecting a row shows class, race, level, sighting history, and its editable note.
-- [ ] Targeting a saved player updates readable character fields and their dates.
-- [ ] Restricted/missing fields retain their previous values and observation dates.
+- [ ] Targeting a saved player updates readable character fields and the single update date.
+- [ ] Restricted/missing fields retain previous values; an unreadable snapshot keeps the date.
+- [ ] Forgive asks for confirmation; Cancel/Escape leaves the entry unchanged.
+- [ ] Relationship choices show the current status; Save note enables only for a changed note.
 - [ ] Settings button opens the actual WoW AddOns preferences page.
 - [ ] Player right-click actions mark the clicked character after retargeting.
 - [ ] Add-by-name form validates first/last name and saves optional notes.
