@@ -29,7 +29,9 @@ Type `/mortal preview` to preview the encounter alert without adding anyone.
 
 Click the minimap skull again to close the panel. Drag it around the minimap edge
 to move it out of the way; the position is saved independently for each character.
-Hover it for instructions. `/mortal` remains available as a fallback command.
+Hover it for instructions. Uncheck **Show minimap button** at the bottom of the
+panel to hide it. This preference is saved per character; use `/mortal` to open
+the panel and enable the button again.
 
 ## Commands
 

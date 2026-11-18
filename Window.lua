@@ -144,10 +144,10 @@ local function CreateWindow()
         end
     end
     window.checks = {}
-    for i, item in ipairs({ { "alerts", "Encounter alerts" }, { "sound", "Sound" } }) do
+    for i, item in ipairs({ { "alerts", "Encounter alerts", 20 }, { "sound", "Sound", 200 }, { "showMinimap", "Show minimap button", 300 } }) do
         local key = item[1]
         local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
-        check:SetPoint("TOPLEFT", 20 + (i - 1) * 180, -646)
+        check:SetPoint("TOPLEFT", item[3], -646)
         local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         label:SetPoint("LEFT", check, "RIGHT", 0, 0)
         label:SetText(item[2])
@@ -194,10 +194,14 @@ local function DragMinimapButton(self)
     end
     ME.db.settings.minimapAngle = math.deg(angle) % 360
     MinimapPosition()
+    ME.UpdateMinimap()
+end
+function ME.UpdateMinimap()
+    if minimapButton then minimapButton:SetShown(ME.db.settings.showMinimap) end
 end
 function ME.InitMinimap()
     if not Minimap then return end
-    if minimapButton then MinimapPosition(); return end
+    if minimapButton then MinimapPosition(); ME.UpdateMinimap(); return end
     minimapButton = CreateFrame("Button", "MortalEnemyMinimapButton", Minimap)
     minimapButton:SetSize(32, 32)
     minimapButton:SetFrameStrata("MEDIUM")
@@ -230,6 +234,7 @@ function ME.InitMinimap()
     local function StopDragging(self)
         self.dragging = false
         self:SetScript("OnUpdate", nil)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end
     minimapButton:SetScript("OnDragStop", StopDragging)
     minimapButton:SetScript("OnHide", StopDragging)
@@ -245,4 +250,5 @@ function ME.InitMinimap()
         if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
     end)
     MinimapPosition()
+    ME.UpdateMinimap()
 end

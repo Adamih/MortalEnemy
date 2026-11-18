@@ -39,7 +39,7 @@ function ME.InitDB()
     ME.db.version = 3
     if type(ME.db.entries) ~= "table" then ME.db.entries = {} end
     if type(ME.db.settings) ~= "table" then ME.db.settings = {} end
-    for _, key in ipairs({ "alerts", "sound" }) do
+    for _, key in ipairs({ "alerts", "sound", "showMinimap" }) do
         if ME.db.settings[key] == nil then ME.db.settings[key] = true end
     end
     local angle = ME.db.settings.minimapAngle
@@ -116,6 +116,7 @@ function ME.Changed()
     if ME.RefreshWorld then ME.RefreshWorld() end
     if ME.RefreshWindow then ME.RefreshWindow() end
     if ME.RefreshTooltip then ME.RefreshTooltip() end
+    if ME.UpdateMinimap then ME.UpdateMinimap() end
 end
 function ME.Save(identity, status, note)
     if not ME.styles[status] or not identity or not identity.key then return end

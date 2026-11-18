@@ -149,6 +149,23 @@ launcher.scripts.OnClick(launcher)
 check(MortalEnemyWindow:IsShown(), "minimap click opens panel")
 launcher.scripts.OnClick(launcher)
 check(not MortalEnemyWindow:IsShown(), "minimap click closes panel")
+local visibilityCheck
+for _, f in ipairs(frames) do
+    if f.kind == "CheckButton" and f.point and f.point[2] == 300 and f.point[3] == -646 then visibilityCheck = f end
+end
+check(visibilityCheck and visibilityCheck:GetChecked(), "minimap visibility control defaults on")
+visibilityCheck:SetChecked(false)
+visibilityCheck.scripts.OnClick(visibilityCheck)
+check(not launcher:IsShown(), "visibility checkbox hides minimap button immediately")
+event("PLAYER_ENTERING_WORLD")
+check(not launcher:IsShown(), "world transition preserves hidden button")
+command("list")
+check(MortalEnemyWindow:IsShown(), "slash command opens panel with minimap button hidden")
+visibilityCheck:SetChecked(true)
+visibilityCheck.scripts.OnClick(visibilityCheck)
+check(launcher:IsShown(), "visibility checkbox restores minimap button")
+command("list")
+
 launcher.scripts.OnEnter(launcher)
 check(GameTooltip:IsShown() and GameTooltip:IsOwned(launcher) and #GameTooltip.lines == 3, "launcher tooltip explains click and drag")
 launcher.scripts.OnLeave(launcher)
