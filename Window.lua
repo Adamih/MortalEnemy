@@ -162,3 +162,87 @@ function ME.ToggleWindow()
     if not window then CreateWindow() end
     window:SetShown(not window:IsShown())
 end
+
+local minimapButton
+local function MinimapPosition()
+    if not minimapButton or not Minimap or not ME.db then return end
+    local angle = math.rad(ME.db.settings.minimapAngle)
+    local x, y = math.cos(angle), math.sin(angle)
+    if GetMinimapShape and GetMinimapShape() == "SQUARE" then
+        local extent = math.max(math.abs(x), math.abs(y))
+        x, y = x / extent, y / extent
+    end
+    minimapButton:ClearAllPoints()
+    minimapButton:SetPoint("CENTER", Minimap, "CENTER",
+        x * (Minimap:GetWidth() / 2 + 8), y * (Minimap:GetHeight() / 2 + 8))
+end
+local function DragMinimapButton(self)
+    local cx, cy = Minimap:GetCenter()
+    if not cx or not cy then return end
+    local x, y = GetCursorPosition()
+    local scale = Minimap:GetEffectiveScale()
+    x, y = x / scale - cx, y / scale - cy
+    if x == 0 and y == 0 then return end
+    local angle
+    if math.atan2 then
+        angle = math.atan2(y, x)
+    elseif x == 0 then
+        angle = y > 0 and math.pi / 2 or -math.pi / 2
+    else
+        angle = math.atan(y / x)
+        if x < 0 then angle = angle + math.pi end
+    end
+    ME.db.settings.minimapAngle = math.deg(angle) % 360
+    MinimapPosition()
+end
+function ME.InitMinimap()
+    if not Minimap then return end
+    if minimapButton then MinimapPosition(); return end
+    minimapButton = CreateFrame("Button", "MortalEnemyMinimapButton", Minimap)
+    minimapButton:SetSize(32, 32)
+    minimapButton:SetFrameStrata("MEDIUM")
+    minimapButton:SetFrameLevel(Minimap:GetFrameLevel() + 10)
+    minimapButton:RegisterForClicks("LeftButtonUp")
+    minimapButton:RegisterForDrag("LeftButton")
+    minimapButton:SetHighlightTexture("Interface\\Minimap\\UI-Minimap-ZoomButton-Highlight", "ADD")
+    local background = minimapButton:CreateTexture(nil, "BACKGROUND")
+    background:SetSize(25, 25)
+    background:SetPoint("CENTER")
+    background:SetTexture("Interface\\Minimap\\UI-Minimap-Background")
+    minimapButton.icon = minimapButton:CreateTexture(nil, "ARTWORK")
+    minimapButton.icon:SetSize(20, 20)
+    minimapButton.icon:SetPoint("TOPLEFT", 7, -5)
+    minimapButton.icon:SetTexture(ME.styles.enemy.icon)
+    local border = minimapButton:CreateTexture(nil, "OVERLAY")
+    border:SetSize(54, 54)
+    border:SetPoint("TOPLEFT")
+    border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
+    minimapButton:SetScript("OnMouseDown", function(self) self.suppressClick = false end)
+    minimapButton:SetScript("OnClick", function(self)
+        if not self.suppressClick then ME.ToggleWindow() end
+    end)
+    minimapButton:SetScript("OnDragStart", function(self)
+        self.dragging, self.suppressClick = true, true
+        GameTooltip:Hide()
+        self:SetScript("OnUpdate", DragMinimapButton)
+        DragMinimapButton(self)
+    end)
+    local function StopDragging(self)
+        self.dragging = false
+        self:SetScript("OnUpdate", nil)
+    end
+    minimapButton:SetScript("OnDragStop", StopDragging)
+    minimapButton:SetScript("OnHide", StopDragging)
+    minimapButton:SetScript("OnEnter", function(self)
+        if self.dragging then return end
+        GameTooltip:SetOwner(self, "ANCHOR_LEFT")
+        GameTooltip:AddLine("Mortal Enemy", 1, 0.75, 0.3)
+        GameTooltip:AddLine("Click to open or close your nemesis list.", 1, 1, 1)
+        GameTooltip:AddLine("Drag to move around the minimap.", 0.8, 0.8, 0.8)
+        GameTooltip:Show()
+    end)
+    minimapButton:SetScript("OnLeave", function(self)
+        if GameTooltip:IsOwned(self) then GameTooltip:Hide() end
+    end)
+    MinimapPosition()
+end

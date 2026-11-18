@@ -13,7 +13,8 @@ The addon is already installed when this folder is at
    Enemy** in the character selection AddOns list. Subsequent Lua edits need only
    `/reload`.
 2. Enter the game. Look for the Mortal Enemy loaded message.
-3. Type `/mortal` to open the book. Target another player and click **Target:
+3. Click the **skull button on your minimap** to open the book. Target another
+   player and click **Target:
    Rival** or **Target: Mortal Enemy**.
 4. Enable the appropriate friendly/enemy nameplates in WoW's own settings. The
    addon does not change your nameplate settings.
@@ -25,6 +26,10 @@ The book lets you select an entry, edit its note, change its status, remove it,
 and customize displays separately for rivals and mortal enemies. It is draggable
 and closes with Escape.
 Type `/mortal preview` to preview the encounter alert without adding anyone.
+
+Click the minimap skull again to close the panel. Drag it around the minimap edge
+to move it out of the way; the position is saved independently for each character.
+Hover it for instructions. `/mortal` remains available as a fallback command.
 
 ## Commands
 

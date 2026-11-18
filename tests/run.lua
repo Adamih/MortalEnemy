@@ -58,7 +58,14 @@ function Methods:GetChecked() return self.checked end
 function Methods:HasFocus() return self.focused or false end
 function Methods:ClearFocus() self.focused = false end
 function Methods:SetEnabled(value) self.enabled = value end
-for _, name in ipairs({"SetSize", "SetPoint", "SetWidth", "SetJustifyH", "SetShadowOffset", "EnableMouse", "SetFrameStrata", "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "ClearAllPoints", "SetClampedToScreen", "SetMovable", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetAllPoints", "SetColorTexture", "SetHighlightTexture", "SetAutoFocus", "SetMaxLetters", "SetTextColor"}) do
+function Methods:GetWidth() return 160 end
+function Methods:GetHeight() return 160 end
+function Methods:GetFrameLevel() return 1 end
+function Methods:GetEffectiveScale() return 2 end
+function Methods:GetCenter() return 300, 300 end
+function Methods:SetOwner(owner) self.owner = owner; self.unitToken = nil; self:ClearLines() end
+function Methods:IsOwned(owner) return self.owner == owner end
+for _, name in ipairs({"RegisterForClicks", "SetFrameLevel", "SetSize", "SetPoint", "SetWidth", "SetJustifyH", "SetShadowOffset", "EnableMouse", "SetFrameStrata", "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "ClearAllPoints", "SetClampedToScreen", "SetMovable", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetAllPoints", "SetColorTexture", "SetHighlightTexture", "SetAutoFocus", "SetMaxLetters", "SetTextColor"}) do
     Methods[name] = function(...) end
 end
 function Methods:SetPoint(...) self.point = {...} end
@@ -69,6 +76,8 @@ function CreateFrame(kind, name, parent)
     return result
 end
 UIParent = object("root")
+Minimap = object("minimap", UIParent)
+function GetCursorPosition() return 800, 600 end
 UISpecialFrames, SlashCmdList = {}, {}
 Enum = { TooltipDataType = { Unit = 2 } }
 TooltipDataProcessor = { AddTooltipPostCall = function(kind, callback)
@@ -134,6 +143,30 @@ check(MortalEnemyCharDB.version == 3 and SlashCmdList.MORTALENEMY, "initializati
 local toc = assert(io.open("MortalEnemy.toc")):read("*a")
 check(toc:find("## SavedVariablesPerCharacter: MortalEnemyCharDB", 1, true), "character-specific TOC persistence")
 check(not toc:find("## SavedVariables:", 1, true), "no shared saved variables")
+check(MortalEnemyMinimapButton and MortalEnemyMinimapButton.parent == Minimap, "minimap launcher exists")
+local launcher = MortalEnemyMinimapButton
+launcher.scripts.OnClick(launcher)
+check(MortalEnemyWindow:IsShown(), "minimap click opens panel")
+launcher.scripts.OnClick(launcher)
+check(not MortalEnemyWindow:IsShown(), "minimap click closes panel")
+launcher.scripts.OnEnter(launcher)
+check(GameTooltip:IsShown() and GameTooltip:IsOwned(launcher) and #GameTooltip.lines == 3, "launcher tooltip explains click and drag")
+launcher.scripts.OnLeave(launcher)
+check(not GameTooltip:IsShown(), "launcher tooltip hides on leave")
+launcher.scripts.OnMouseDown(launcher)
+launcher.scripts.OnDragStart(launcher)
+check(ME.db.settings.minimapAngle == 0 and launcher.point[4] == 88 and launcher.point[5] == 0,
+    "drag uses scaled cursor and saves position on minimap edge")
+launcher.scripts.OnDragStop(launcher)
+check(not launcher.scripts.OnUpdate, "drag polling stops on release")
+launcher.scripts.OnClick(launcher)
+check(not MortalEnemyWindow:IsShown(), "drag release does not open panel")
+launcher.scripts.OnMouseDown(launcher)
+launcher.scripts.OnClick(launcher)
+check(MortalEnemyWindow:IsShown(), "ordinary click works after dragging")
+launcher.scripts.OnClick(launcher)
+event("PLAYER_ENTERING_WORLD")
+check(MortalEnemyMinimapButton == launcher and launcher.point[4] == 88, "world re-entry reuses launcher and saved position")
 command("list")
 check(MortalEnemyWindow:IsShown(), "empty book opens")
 command("list")
@@ -342,11 +375,13 @@ check(ME.db.settings.display.enemy.glow == nil, "obsolete glow preference is rem
 ME.db.settings.display = configuredDisplay
 local saved = MortalEnemyCharDB
 ME.InitDB()
-check(MortalEnemyCharDB == saved and ME.db.entries["alice redfen"], "initialization preserves saved records")
+check(MortalEnemyCharDB == saved and ME.db.entries["alice redfen"] and ME.db.settings.minimapAngle == 0,
+    "initialization preserves saved records and minimap angle")
 -- Simulate WoW supplying a separate SavedVariables table for another character.
 MortalEnemyCharDB = nil
 ME.InitDB()
-check(next(ME.db.entries) == nil and ME.db.settings.sound and ME.db.settings.display.enemy.badge
+check(next(ME.db.entries) == nil and ME.db.settings.sound and ME.db.settings.minimapAngle == 225
+    and ME.db.settings.display.enemy.badge
     and ME.db.settings.display.enemy.tooltip, "new character gets independent empty list and default settings")
 ME.db.settings.display.enemy.tooltip = false
 command("add rival Charlie Story Another story")

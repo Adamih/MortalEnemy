@@ -70,6 +70,7 @@ frame:SetScript("OnEvent", function(self, event, unit)
         ME.InitDB()
         ready = true
         ME.InitTooltips()
+        ME.InitMinimap()
         self:UnregisterEvent("ADDON_LOADED")
         SLASH_MORTALENEMY1 = "/mortal"
         SLASH_MORTALENEMY2 = "/mortalenemy"
@@ -77,7 +78,7 @@ frame:SetScript("OnEvent", function(self, event, unit)
         for _, name in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "PLAYER_REGEN_ENABLED" }) do
             self:RegisterEvent(name)
         end
-        ME.Print("Loaded. Type /mortal to open your book, or /mortal help.")
+        ME.Print("Loaded. Click the skull on your minimap to open your book. /mortal help for commands.")
     elseif not ready then return
     elseif event == "NAME_PLATE_UNIT_ADDED" then
         if ME.IsSecret(unit) or type(unit) ~= "string" then return end
@@ -92,6 +93,7 @@ frame:SetScript("OnEvent", function(self, event, unit)
     elseif event == "PLAYER_ENTERING_WORLD" then
         for token in pairs(ME.units) do ME.RemovePlate(token) end
         ME.InitTooltips()
+        ME.InitMinimap()
         ME.SeedNameplates()
         ME.RefreshWorld()
     else ME.RefreshWorld() end

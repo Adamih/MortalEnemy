@@ -42,6 +42,11 @@ function ME.InitDB()
     for _, key in ipairs({ "alerts", "sound" }) do
         if ME.db.settings[key] == nil then ME.db.settings[key] = true end
     end
+    local angle = ME.db.settings.minimapAngle
+    if type(angle) ~= "number" or angle ~= angle or angle == math.huge or angle == -math.huge then
+        angle = 225
+    end
+    ME.db.settings.minimapAngle = angle % 360
     if type(ME.db.settings.display) ~= "table" then ME.db.settings.display = {} end
     for status in pairs(ME.styles) do
         local options = ME.db.settings.display[status]
