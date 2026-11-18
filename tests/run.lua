@@ -190,8 +190,11 @@ local glow
 for _, f in ipairs(frames) do if f.parent == plates.nameplate1 and f.borders then glow = f end end
 check(glow and glow:IsShown(), "saved player's nameplate gets glow")
 check(glow.point[2] == plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar, "glow hugs health bar, not oversized plate root")
-check(badge.point[2] == plates.nameplate1.UnitFrame.name and badge.point[1] == "BOTTOM", "badge centered above the player name")
-for _, f in ipairs(frames) do check(not (f.parent == UIParent and f.icon and type(f.text) == "table"), "no duplicate fixed-screen target badge") end
+check(badge.point[2] == plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar
+    and badge.point[1] == "RIGHT" and badge.point[3] == "LEFT" and badge.point[4] == -6,
+    "badge sits just left of the health bar")
+check(badge.text == "", "badge has no status label")
+for _, f in ipairs(frames) do check(not (f.parent == UIParent and f.icon and not f.title), "no duplicate fixed-screen target badge") end
 local bar = plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar
 bar:Hide()
 ME.RefreshWorld()
@@ -207,13 +210,6 @@ check(glow:IsShown(), "glow re-enables immediately")
 command("badges enemy")
 check(not badge:IsShown() and glow:IsShown(), "badge toggles independently of glow")
 command("badges enemy")
-ME.db.settings.display.enemy.badgeText = false
-ME.Changed()
-check(badge.text:GetText() == "", "icon-only badge")
-ME.db.settings.display.enemy.badgeText = true
-ME.Changed()
-check(badge.text:GetText() == "Mortal Enemy", "badge label restored")
-
 event("PLAYER_ENTERING_WORLD")
 check(ME.units.nameplate1 and badge:IsShown(), "world transition recovers visible plates")
 plates.nameplate1.forbidden = true
@@ -277,7 +273,7 @@ command("list")
 check(MortalEnemyWindow:IsShown(), "window opens")
 local rivalGlowCheck
 for _, f in ipairs(frames) do
-    if f.kind == "CheckButton" and f.point and f.point[2] == 216 and f.point[3] == -568 then rivalGlowCheck = f end
+    if f.kind == "CheckButton" and f.point and f.point[2] == 260 and f.point[3] == -568 then rivalGlowCheck = f end
 end
 check(rivalGlowCheck, "per-status display controls exist")
 rivalGlowCheck:SetChecked(false)

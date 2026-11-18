@@ -10,19 +10,12 @@ local function MakeBadge(parent)
     badge.icon = badge:CreateTexture(nil, "OVERLAY")
     badge.icon:SetSize(18, 18)
     badge.icon:SetPoint("LEFT")
-    badge.text = badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-    badge.text:SetPoint("LEFT", badge.icon, "RIGHT", 4, 0)
-    badge.text:SetShadowOffset(1, -1)
     badge:Hide()
     return badge
 end
 local function Paint(badge, entry)
     local style = ME.styles[entry.status]
     badge.icon:SetTexture(style.icon)
-    badge.text:SetText(ME.db.settings.display[entry.status].badgeText and style.label or "")
-    badge.text:SetTextColor(style.r, style.g, style.b)
-    local textWidth = ME.Read(badge.text.GetStringWidth, badge.text) or 0
-    badge:SetSize(18 + (textWidth > 0 and (4 + math.ceil(textWidth)) or 0), 18)
     badge:Show()
 end
 function ME.ShowNotice(entry, preview)
@@ -121,12 +114,12 @@ function ME.UpdatePlate(unit)
     local plate = ME.Read(C_NamePlate and C_NamePlate.GetNamePlateForUnit, unit)
     if not plate or (plate.IsForbidden and plate:IsForbidden()) then return end
     local healthBar, nameAnchor = VisualAnchors(plate)
-    local badgeAnchor = nameAnchor or healthBar
+    local badgeAnchor = healthBar or nameAnchor
     if options.badge and badgeAnchor then
         if not badge then badge = MakeBadge(plate); badges[unit] = badge end
         badge:SetParent(plate)
         badge:ClearAllPoints()
-        badge:SetPoint("BOTTOM", badgeAnchor, "TOP", 0, 3)
+        badge:SetPoint("RIGHT", badgeAnchor, "LEFT", -6, 0)
         Paint(badge, entry)
     end
     if options.glow and healthBar then

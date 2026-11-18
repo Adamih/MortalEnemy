@@ -17,8 +17,8 @@ The addon is already installed when this folder is at
    Rival** or **Target: Mortal Enemy**.
 4. Enable the appropriate friendly/enemy nameplates in WoW's own settings. The
    addon does not change your nameplate settings.
-5. Look for an **amber sword + Rival** or **red skull + Mortal Enemy** badge above
-   their nameplate. There is no separate persistent status badge at the top of
+5. Look for an **sword** (rival) or **skull** (mortal enemy) icon just left of
+   their health bar. There is no separate persistent status badge at the top of
    the screen.
 
 The book lets you select an entry, edit its note, change its status, remove it,
@@ -61,17 +61,16 @@ their note unless you provide a replacement.
 Open `/mortal` and use the **Open World Display** section. Each row controls
 one status independently, using amber for rivals and red for mortal enemies:
 
-- **Badge:** a compact sword/skull icon centered above the player's name.
+- **Badge:** a compact sword/skull icon just left of the visible health bar.
+  On name-only plates it sits to the left of the player's name.
   Targeting the player does not create a second badge elsewhere on screen.
 - **Glow:** a subtle, layered outline fitted to the visible health bar. It uses
   addon-owned borders and does not recolor or replace the underlying health bar.
   On name-only plates with a hidden health bar, no outline is drawn.
 - **Tooltip:** adds your relationship to the normal player mouseover tooltip.
-- **Badge text:** show the relationship label next to the nameplate icon, or
-  keep only the icon.
 - **Note:** include the personal note in the tooltip, or show only the relationship.
 
-All five options start enabled for each status. An existing disabled badge
+All four options start enabled for each status. An existing disabled badge
 preference stays disabled when upgrading. Settings are saved per character.
 Changes apply to currently recognized nameplates and an open player tooltip;
 removing a saved player also clears their tooltip annotation. Switching the
@@ -134,7 +133,7 @@ them untargeted but their nameplate visible, and during combat. The output repor
 - [ ] Notes/status survive `/reload` and a full logout/login.
 - [ ] Recycled nameplates do not display a previous player's badge.
 - [ ] Toggle Badge, Glow, and Tooltip separately in each relationship row.
-- [ ] Icon-only mode hides the badge label; Note hides only the tooltip note.
+- [ ] Badge is icon-only, left of the bar; Note hides only the tooltip note.
 - [ ] Rival settings do not change enemy settings, and vice versa.
 - [ ] Removing an entry clears its badge, glow, and open tooltip annotation.
 - [ ] Hover players, then NPCs/items: no stale or duplicate relationship lines.
