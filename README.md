@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.3.0 targets interface 16001.
+The other player does not need the addon. Version 0.3.1 targets interface 16001.
 
 ## First run
 
@@ -37,9 +37,9 @@ Type `/mortal preview` to preview the encounter alert without adding anyone.
 | `/mortal enemy [note]` | Mark the targeted player as a mortal enemy |
 | `/mortal note <text>` | Update the saved target's note; omit text to clear |
 | `/mortal remove` | Remove the targeted saved player |
-| `/mortal remove Name` | Remove an entry by name |
-| `/mortal add enemy Name [note]` | Manually add an enemy |
-| `/mortal add rival Name [note]` | Manually add a rival |
+| `/mortal remove First Last` | Remove an entry by name |
+| `/mortal add enemy First Last [note]` | Manually add an enemy |
+| `/mortal add rival First Last [note]` | Manually add a rival |
 | `/mortal badges [rival\|enemy]` | Toggle badges for one status or both |
 | `/mortal glow [rival\|enemy]` | Toggle nameplate glow for one status or both |
 | `/mortal tooltip [rival\|enemy]` | Toggle tooltip details for one status or both |
@@ -50,7 +50,9 @@ Type `/mortal preview` to preview the encounter alert without adding anyone.
 | `/mortal help` | Show command help |
 
 Only players on your current realm can be added or recognized. Commands take a
-plain player name; realm suffixes are not accepted.
+complete first and last name; realm suffixes are not accepted. For example,
+`/mortal add enemy Bram Redfen Killed me while fishing`. Quoted names work too:
+`/mortal add rival "Bram Redfen" A worthy opponent`.
 Notes are limited to 240 bytes when saved. Marking the same player again keeps
 their note unless you provide a replacement.
 
@@ -91,7 +93,11 @@ Recognition checks available player identities from visible nameplates, your
 target, and mouseover. Only your current realm is accepted. Badges require an
 accessible nameplate. Names identify entries within that realm; a known player
 GUID can also match a renamed character. A readable conflicting GUID prevents a
-name match. If realm information is restricted, recognition is skipped.
+name match. Forever's `UnitName` surname is never interpreted as a realm. The
+addon uses `GetUnitName` for the complete name and `UnitIsSameServer` to check
+eligibility. If the full name or same-server result is restricted, recognition
+is skipped. Targeting failures explain which check failed; `/mortal diagnose`
+also reports the same-server check.
 
 An encounter produces a five-second banner, a chat line, and an optional raid
 warning sound. Continuous visibility does not repeatedly announce the same player.
@@ -145,7 +151,8 @@ luac -p Core.lua Display.lua Window.lua MortalEnemy.lua tests/run.lua
 ```
 
 The standalone simulated client covers initialization, player/NPC/self filtering,
-current-realm filtering, GUID matching, character isolation, restricted and failing API reads, CRUD commands, nameplate
+Forever first/surname handling, current-realm filtering, GUID matching,
+character isolation, restricted and failing API reads, CRUD commands, nameplate
 reuse, forbidden plates, world transitions, encounter cooldowns, window actions,
 independent display settings, glow cleanup, and tooltip annotation/rebuilds,
 and saved-data preservation. It cannot verify rendering, protected-frame rules,

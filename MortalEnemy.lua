@@ -5,8 +5,8 @@ local function Help()
     ME.Print("/mortal — open your book of rivals.")
     ME.Print("/mortal rival [note] or enemy [note] — mark your target.")
     ME.Print("/mortal note <text> — update your target's note; omit text to clear.")
-    ME.Print("/mortal remove [Name] — remove a named player or your target.")
-    ME.Print("/mortal add rival|enemy Name [note] — add manually.")
+    ME.Print("/mortal remove [First Last] — remove a named player or your target.")
+    ME.Print("/mortal add rival|enemy First Last [note] — add manually.")
     ME.Print("/mortal badges|glow|tooltip [rival|enemy] — toggle a display; /mortal alerts|sound.")
     ME.Print("/mortal preview — sample alert; /mortal diagnose — identity availability.")
 end
@@ -49,11 +49,16 @@ local function Command(message)
             entry, key = ME.Find(ME.Identity("target"))
         end
         if key and ME.db.entries[key] then ME.Remove(key)
-        else ME.Print("No match. Target a saved player or use /mortal remove Name.") end
+        else ME.Print("No match. Target a saved player or use /mortal remove First Last.") end
     elseif command == "add" then
-        local status, name, note = rest:match("^(%S+)%s+(%S+)%s*(.-)$")
-        if not ME.styles[status] or not ME.Key(name) then
-            ME.Print("Usage: /mortal add rival|enemy Name [note]"); return
+        local status, name, note = rest:match('^(%S+)%s+"([^"]+)"%s*(.-)$')
+        if not status then
+            local first, last
+            status, first, last, note = rest:match("^(%S+)%s+(%S+)%s+(%S+)%s*(.-)$")
+            if first and last then name = first .. " " .. last end
+        end
+        if not ME.styles[status] or not ME.Key(name) or not name:find("%s") then
+            ME.Print("Usage: /mortal add rival|enemy First Last [note]"); return
         end
         ME.Save({ key = ME.Key(name), name = name }, status, note)
     else Help() end

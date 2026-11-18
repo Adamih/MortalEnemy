@@ -86,7 +86,29 @@ function GetNormalizedRealmName() return "HomeRealm" end
 function GetRealZoneText() return "Elwynn Forest" end
 function GetBuildInfo() return "1.60.1", "70938", "", 16001 end
 function UnitIsPlayer(unit) return units[unit] and units[unit].player end
-function UnitName(unit) local u = units[unit]; if u then return u.name, u.realm end end
+local surnames = { Alice = "Redfen", Bob = "Stone", Me = "Self", Nobody = "Else", Charlie = "Story" }
+local function FullName(u)
+    if not u then return nil end
+    if issecretvalue(u.name) then return u.name end
+    return u.name:find(" ") and u.name or (surnames[u.name] and (u.name .. " " .. surnames[u.name]) or u.name)
+end
+function GetUnitName(unit) return FullName(units[unit]) end
+function UnitName(unit)
+    local u = units[unit]
+    if not u then return nil end
+    if issecretvalue(u.name) then return secret, secret end
+    return u.name, surnames[u.name]
+end
+function UnitIsSameServer(name)
+    for _, u in pairs(units) do
+        local full = FullName(u)
+        if not issecretvalue(full) and full == name then
+            if issecretvalue(u.realm) then return secret end
+            return not u.realm or u.realm == "" or u.realm == "HomeRealm"
+        end
+    end
+    return false
+end
 function UnitGUID(unit) return units[unit] and units[unit].guid end
 function UnitIsUnit(a, b) return units[a] ~= nil and units[a] == units[b] end
 function PlaySound() sounds = sounds + 1 end
@@ -125,8 +147,18 @@ command("enemy")
 check(next(ME.db.entries) == nil, "NPC must not add")
 units.target = player("Alice", "", "Player-1")
 command("rival Helped me once")
-local alice = ME.db.entries["alice"]
+local alice = ME.db.entries["alice redfen"]
 check(alice and alice.status == "rival" and alice.note == "Helped me once", "save target on current realm")
+check(alice.name == "Alice Redfen", "Forever surname is part of the name, never a realm")
+local originalGetUnitName = GetUnitName
+GetUnitName = nil
+local fallback = ME.Identity("target")
+check(fallback and fallback.name == "Alice Redfen", "first/surname fallback preserves full name")
+GetUnitName = originalGetUnitName
+units.target = player("Alice Other", "HomeRealm", "Player-different-alice")
+check(ME.Find(ME.Identity("target")) == nil, "same first name with different surname is not a match")
+units.target = player("Alice", "", "Player-1")
+
 command("enemy")
 check(alice.status == "enemy" and alice.note == "Helped me once", "change status preserves note")
 command("note Killed me while fishing")
@@ -140,7 +172,7 @@ check(ME.Identity("target") == nil and alice.status == "enemy", "off-realm targe
 units.target = player("Alice", secret, "Player-1")
 check(ME.Identity("target") == nil, "restricted realm cannot establish eligibility")
 units.target = originalTarget
-check(ME.Find({key = "alice", guid = "Player-other"}) == nil, "GUID conflict must not match")
+check(ME.Find({key = "alice redfen", guid = "Player-other"}) == nil, "GUID conflict must not match")
 check(ME.Find({key = "renamed", guid = "Player-1"}) == alice, "GUID matches renamed player")
 units.nameplate1 = units.target
 plates.nameplate1 = object("plate")
@@ -195,7 +227,7 @@ ME.UpdatePlate("nameplate1")
 check(not badge:IsShown(), "restricted name skips matching")
 units.nameplate1.guid = "Player-1"
 ME.UpdatePlate("nameplate1")
-check(badge:IsShown(), "known readable GUID matches when name is restricted")
+check(not badge:IsShown(), "restricted full name cannot establish same-realm identity")
 
 units.nameplate1 = player("Alice", "HomeRealm", secret)
 ME.UpdatePlate("nameplate1")
@@ -209,18 +241,24 @@ command("enemy")
 command("diagnose")
 local oldUnitName = UnitName
 UnitName = function() error("API unavailable") end
+local oldGetUnitName = GetUnitName
+GetUnitName = nil
 check(ME.Identity("target") == nil, "failed identity query with restricted GUID is safe")
+GetUnitName = oldGetUnitName
 UnitName = oldUnitName
 
 command("add enemy Bob-OtherRealm A grudge")
 command("add enemy Bob-HomeRealm A grudge")
-check(not ME.db.entries.bob, "realm suffixes are rejected, including own realm")
-command("add enemy Bob A grudge")
-check(ME.db.entries.bob.note == "A grudge" and ME.db.entries.bob.realm == nil, "plain-name manual add")
+check(not ME.db.entries["bob stone"], "realm suffixes are rejected, including own realm")
+command('add rival "Charlie Story" A quoted name')
+check(ME.db.entries["charlie story"].note == "A quoted name", "quoted full names can carry notes")
+command("remove Charlie Story")
+command("add enemy Bob Stone A grudge")
+check(ME.db.entries["bob stone"].note == "A grudge" and ME.db.entries["bob stone"].realm == nil, "full-name manual add")
 command("add")
 command("add dragon Bob-OtherRealm")
 command("remove Alice-HomeRealm")
-check(ME.db.entries["alice"] ~= nil, "realm suffix is not accepted when removing")
+check(ME.db.entries["alice redfen"] ~= nil, "realm suffix is not accepted when removing")
 command("list")
 check(MortalEnemyWindow:IsShown(), "window opens")
 local rivalGlowCheck
@@ -234,14 +272,14 @@ check(not ME.db.settings.display.rival.glow and ME.db.settings.display.enemy.glo
     "rival glow checkbox changes only its own setting")
 
 local row
-for _, f in ipairs(frames) do if f.key == "bob" then row = f end end
+for _, f in ipairs(frames) do if f.key == "bob stone" then row = f end end
 check(row, "list row rendered")
 row.scripts.OnClick(row)
 local edit
 for _, f in ipairs(frames) do if f.kind == "EditBox" then edit = f end end
 edit:SetText("New note")
 edit.scripts.OnEnterPressed(edit)
-check(ME.db.entries["bob"].note == "New note", "window saves note")
+check(ME.db.entries["bob stone"].note == "New note", "window saves note")
 -- Tooltip hooks operate on the tooltip's own unit, not an unrelated mouseover.
 units.tooltipunit = player("Bob", "HomeRealm", "Player-2")
 units.mouseover = player("Nobody", "HomeRealm", "Player-3")
@@ -278,7 +316,7 @@ check(#GameTooltip.lines == 1, "restricted tooltip token skipped")
 GameTooltip.unitToken = "tooltipunit"
 units.tooltipunit = player("Bob", "", "Player-2")
 GameTooltip:RebuildFromTooltipInfo()
-command("remove Bob")
+command("remove Bob Stone")
 check(#GameTooltip.lines == 1, "removing entry removes current tooltip annotation")
 GameTooltip:Hide()
 command("sound")
@@ -286,7 +324,7 @@ check(not ME.db.settings.sound, "sound toggle")
 command("badges")
 check(not badge:IsShown(), "disable badges hides existing")
 command("preview")
-check(not ME.db.entries["bob"], "remove named player")
+check(not ME.db.entries["bob stone"], "remove named player")
 check(#ME.Note(string.rep("a", 241)) == 240, "ASCII note limit")
 check(ME.Note(string.rep("a", 239) .. "é") == string.rep("a", 239), "UTF-8 note truncation")
 check(#ME.Note(string.rep("é", 121)) == 240, "UTF-8 boundary at limit")
@@ -301,20 +339,20 @@ check(ME.db.settings.display.enemy.glow and ME.db.settings.display.enemy.tooltip
 ME.db.settings.display = configuredDisplay
 local saved = MortalEnemyCharDB
 ME.InitDB()
-check(MortalEnemyCharDB == saved and ME.db.entries["alice"], "initialization preserves saved records")
+check(MortalEnemyCharDB == saved and ME.db.entries["alice redfen"], "initialization preserves saved records")
 -- Simulate WoW supplying a separate SavedVariables table for another character.
 MortalEnemyCharDB = nil
 ME.InitDB()
 check(next(ME.db.entries) == nil and ME.db.settings.sound and ME.db.settings.display.enemy.badge
     and ME.db.settings.display.enemy.tooltip, "new character gets independent empty list and default settings")
 ME.db.settings.display.enemy.tooltip = false
-command("add rival Charlie Another story")
-check(not saved.entries.charlie and saved.entries.alice, "second character cannot change first character's list")
+command("add rival Charlie Story Another story")
+check(not saved.entries["charlie story"] and saved.entries["alice redfen"], "second character cannot change first character's list")
 MortalEnemyCharDB = saved
 ME.InitDB()
-check(ME.db.entries.alice and not ME.db.entries.charlie and not ME.db.settings.sound
+check(ME.db.entries["alice redfen"] and not ME.db.entries["charlie story"] and not ME.db.settings.sound
     and ME.db.settings.display.enemy.tooltip, "returning character restores their own list and display settings")
-command("remove Alice")
+command("remove Alice Redfen")
 check(next(ME.db.entries) == nil, "remove final entry")
 ME.db.entries.bad = {status = "invalid"}
 ME.InitDB()

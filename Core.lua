@@ -26,12 +26,10 @@ function ME.Note(value)
     return text:sub(1, boundary - 1)
 end
 function ME.Key(name)
-    if type(name) ~= "string" or name == "" or name:find("[%s%-]") then return nil end
+    if type(name) ~= "string" or name:find("[%c%-]") then return nil end
+    name = ME.Trim(name):gsub("%s+", " ")
+    if name == "" then return nil end
     return string.lower(name)
-end
-local function NormalizeRealm(realm)
-    if type(realm) ~= "string" then return nil end
-    return string.lower(realm:gsub("%s", ""))
 end
 function ME.InitDB()
     -- Development reset: discard the former account-wide data entirely.
@@ -69,18 +67,30 @@ function ME.InitDB()
     end
 end
 function ME.Identity(unit)
-    if ME.Read(UnitIsPlayer, unit) ~= true then return nil end
-    local ok, name, realm = pcall(UnitName, unit)
-    if not ok or ME.IsSecret(realm) then return nil end
-    local currentRealm = NormalizeRealm(ME.Read(GetNormalizedRealmName))
-    if not currentRealm or currentRealm == "" then return nil end
-    -- An empty realm from UnitName denotes the player's own realm.
-    if realm ~= nil and realm ~= "" and NormalizeRealm(realm) ~= currentRealm then return nil end
+    if ME.Read(UnitIsPlayer, unit) ~= true then return nil, "The target is not a readable player unit." end
+    -- Forever's tuple APIs can return first name + SURNAME, not name + realm.
+    -- GetUnitName formats the complete character name for this client.
+    local name = ME.Read(GetUnitName, unit, true)
+    if type(name) ~= "string" or name == "" then
+        local ok, first, surname = pcall(UnitName, unit)
+        if not ok or ME.IsSecret(first) or ME.IsSecret(surname) then
+            return nil, "The player's name is restricted. Try outside combat."
+        end
+        if type(first) ~= "string" or first == "" then return nil, "The player's name is not available yet." end
+        name = first
+        if not first:find("%s") and type(surname) == "string" and surname ~= "" then
+            name = first .. " " .. surname
+        end
+    end
+    if name == UNKNOWNOBJECT or name == UNKNOWN then return nil, "The player's name is not available yet." end
+    -- Never infer a realm from a surname. Ask the native same-server API.
+    local sameServer = ME.Read(UnitIsSameServer, name)
+    if sameServer == false then return nil, "That player is not on your realm." end
+    if sameServer ~= true then return nil, "The game could not confirm the player's realm. Run /mortal diagnose." end
+    local key = ME.Key(name)
+    if not key or not name:find("%s") then return nil, "The player's full first and last name is not available yet." end
     local guid = ME.Read(UnitGUID, unit)
     if type(guid) ~= "string" then guid = nil end
-    if ME.IsSecret(name) then return guid and { guid = guid } or nil end
-    local key = ME.Key(name)
-    if not key then return nil end
     return { key = key, name = name, guid = guid }
 end
 function ME.Find(identity)
@@ -115,9 +125,9 @@ function ME.Save(identity, status, note)
 end
 function ME.MarkTarget(status, note)
     if ME.Read(UnitIsUnit, "target", "player") == true then ME.Print("Choose another player first."); return end
-    local identity = ME.Identity("target")
+    local identity, reason = ME.Identity("target")
     if not identity or not identity.key then
-        ME.Print("Target a player on your realm with a readable identity. Try outside combat, or use /mortal add.")
+        ME.Print(reason or "Target a player on your realm first.")
         return
     end
     return ME.Save(identity, status, note)
@@ -145,16 +155,19 @@ function ME.Diagnose()
     for unit in pairs(ME.units) do units[#units + 1] = unit end
     for i = 1, math.min(#units, 14) do
         local unit = units[i]
-        local function state(func)
-            local ok, value = pcall(func, unit)
+        local function state(func, argument)
+            local ok, value = pcall(func, argument or unit)
             if not ok then return "unavailable" end
             if ME.IsSecret(value) then return "restricted" end
+            if type(value) == "boolean" then return tostring(value) end
             return value == nil and "missing" or "readable"
         end
-        local identity = ME.Identity(unit)
-        ME.Print(unit .. ": name=" .. state(UnitName) .. ", GUID=" .. state(UnitGUID)
-            .. (identity and identity.key and (", player=" .. identity.name)
-                or (identity and ", GUID-only identity" or ", no usable player identity")))
+        local fullName = ME.Read(GetUnitName, unit, true)
+        local sameRealm = type(fullName) == "string" and state(UnitIsSameServer, fullName) or "unknown"
+        local identity, reason = ME.Identity(unit)
+        ME.Print(unit .. ": player=" .. state(UnitIsPlayer) .. ", full name=" .. state(GetUnitName)
+            .. ", name parts=" .. state(UnitName) .. ", same realm=" .. sameRealm .. ", GUID=" .. state(UnitGUID)
+            .. (identity and (", matched identity=" .. identity.name) or (", " .. (reason or "unavailable"))))
     end
     if #units > 14 then ME.Print("Additional nameplates omitted.") end
 end
