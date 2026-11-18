@@ -1,0 +1,6 @@
+## Interface: 16001
+## Title: Mortal Enemy
+## Notes: Minimal load test for WoW Forever.
+## Version: 0.0.1
+
+MortalEnemy.lua
