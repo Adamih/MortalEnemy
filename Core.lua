@@ -38,12 +38,23 @@ function ME.InitDB()
     MortalEnemyDB = nil
     if type(MortalEnemyCharDB) ~= "table" then MortalEnemyCharDB = {} end
     ME.db = MortalEnemyCharDB
-    ME.db.version = 2
+    ME.db.version = 3
     if type(ME.db.entries) ~= "table" then ME.db.entries = {} end
     if type(ME.db.settings) ~= "table" then ME.db.settings = {} end
-    for _, key in ipairs({ "badges", "alerts", "sound" }) do
+    for _, key in ipairs({ "alerts", "sound" }) do
         if ME.db.settings[key] == nil then ME.db.settings[key] = true end
     end
+    if type(ME.db.settings.display) ~= "table" then ME.db.settings.display = {} end
+    for status in pairs(ME.styles) do
+        local options = ME.db.settings.display[status]
+        if type(options) ~= "table" then options = {}; ME.db.settings.display[status] = options end
+        for _, key in ipairs({ "badge", "glow", "tooltip", "badgeText", "tooltipNote" }) do
+            if type(options[key]) ~= "boolean" then
+                options[key] = key ~= "badge" or ME.db.settings.badges ~= false
+            end
+        end
+    end
+    ME.db.settings.badges = nil
     for key, entry in pairs(ME.db.entries) do
         if type(entry) ~= "table" or not ME.styles[entry.status]
             or ME.Key(entry.name) ~= key then
@@ -87,6 +98,7 @@ end
 function ME.Changed()
     if ME.RefreshWorld then ME.RefreshWorld() end
     if ME.RefreshWindow then ME.RefreshWindow() end
+    if ME.RefreshTooltip then ME.RefreshTooltip() end
 end
 function ME.Save(identity, status, note)
     if not ME.styles[status] or not identity or not identity.key then return end

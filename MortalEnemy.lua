@@ -7,7 +7,7 @@ local function Help()
     ME.Print("/mortal note <text> — update your target's note; omit text to clear.")
     ME.Print("/mortal remove [Name] — remove a named player or your target.")
     ME.Print("/mortal add rival|enemy Name [note] — add manually.")
-    ME.Print("/mortal badges|alerts|sound — toggle a setting.")
+    ME.Print("/mortal badges|glow|tooltip [rival|enemy] — toggle a display; /mortal alerts|sound.")
     ME.Print("/mortal preview — sample alert; /mortal diagnose — identity availability.")
 end
 local function Command(message)
@@ -19,7 +19,18 @@ local function Command(message)
     elseif command == "help" then Help()
     elseif command == "preview" then ME.Preview()
     elseif command == "diagnose" then ME.Diagnose()
-    elseif command == "badges" or command == "alerts" or command == "sound" then
+    elseif command == "badges" or command == "glow" or command == "tooltip" then
+        if rest ~= "" and not ME.styles[rest] then ME.Print("Choose rival or enemy, or omit to toggle both."); return end
+        local key = command == "badges" and "badge" or command
+        local statuses = rest ~= "" and { rest } or { "rival", "enemy" }
+        local enabled = false
+        for _, status in ipairs(statuses) do
+            if not ME.db.settings.display[status][key] then enabled = true end
+        end
+        for _, status in ipairs(statuses) do ME.db.settings.display[status][key] = enabled end
+        ME.Print(command .. (rest ~= "" and (" (" .. ME.styles[rest].label .. ")") or "") .. ": " .. (enabled and "on" or "off"))
+        ME.Changed()
+    elseif command == "alerts" or command == "sound" then
         ME.db.settings[command] = not ME.db.settings[command]
         ME.Print(command .. ": " .. (ME.db.settings[command] and "on" or "off"))
         ME.Changed()
@@ -53,6 +64,7 @@ frame:SetScript("OnEvent", function(self, event, unit)
         if unit ~= addonName then return end
         ME.InitDB()
         ready = true
+        ME.InitTooltips()
         self:UnregisterEvent("ADDON_LOADED")
         SLASH_MORTALENEMY1 = "/mortal"
         SLASH_MORTALENEMY2 = "/mortalenemy"
@@ -74,6 +86,7 @@ frame:SetScript("OnEvent", function(self, event, unit)
         if entry then ME.Observe(entry, key) end
     elseif event == "PLAYER_ENTERING_WORLD" then
         for token in pairs(ME.units) do ME.RemovePlate(token) end
+        ME.InitTooltips()
         ME.SeedNameplates()
         ME.RefreshWorld()
     else ME.RefreshWorld() end

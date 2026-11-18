@@ -38,10 +38,13 @@ function ME.RefreshWindow()
     end
     for _, button in ipairs(window.editButtons) do button:SetEnabled(entry ~= nil) end
     for key, check in pairs(window.checks) do check:SetChecked(ME.db.settings[key]) end
+    for status, checks in pairs(window.displayChecks) do
+        for key, check in pairs(checks) do check:SetChecked(ME.db.settings.display[status][key]) end
+    end
 end
 local function CreateWindow()
     window = CreateFrame("Frame", "MortalEnemyWindow", UIParent, "BackdropTemplate")
-    window:SetSize(530, 586)
+    window:SetSize(530, 716)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -116,18 +119,42 @@ local function CreateWindow()
         end),
         Button(window, "Remove", 118, 390, -481, function() if selectedKey then ME.Remove(selectedKey); selectedKey = nil; ME.RefreshWindow() end end),
     }
+    Label("OPEN WORLD DISPLAY", "GameFontNormal", 20, -523)
+    local columns = {
+        { "badge", "Badge", 148 }, { "glow", "Glow", 216 }, { "tooltip", "Tooltip", 284 },
+        { "badgeText", "Badge text", 352 }, { "tooltipNote", "Note", 444 },
+    }
+    for _, column in ipairs(columns) do Label(column[2], "GameFontHighlightSmall", column[3], -549) end
+    window.displayChecks = {}
+    for i, status in ipairs({ "rival", "enemy" }) do
+        local y = -568 - (i - 1) * 32
+        local style = ME.styles[status]
+        local label = Label(style.label, "GameFontNormal", 20, y - 9)
+        label:SetTextColor(style.r, style.g, style.b)
+        window.displayChecks[status] = {}
+        for _, column in ipairs(columns) do
+            local key = column[1]
+            local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
+            check:SetPoint("TOPLEFT", column[3], y)
+            check:SetScript("OnClick", function(self)
+                ME.db.settings.display[status][key] = self:GetChecked() and true or false
+                ME.Changed()
+            end)
+            window.displayChecks[status][key] = check
+        end
+    end
     window.checks = {}
-    for i, item in ipairs({ { "badges", "Badges" }, { "alerts", "Alerts" }, { "sound", "Sound" } }) do
+    for i, item in ipairs({ { "alerts", "Encounter alerts" }, { "sound", "Sound" } }) do
         local key = item[1]
         local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
-        check:SetPoint("TOPLEFT", 20 + (i - 1) * 125, -522)
+        check:SetPoint("TOPLEFT", 20 + (i - 1) * 180, -646)
         local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
         label:SetPoint("LEFT", check, "RIGHT", 0, 0)
         label:SetText(item[2])
-        check:SetScript("OnClick", function(self) ME.db.settings[key] = self:GetChecked() and true or false; ME.RefreshWorld() end)
+        check:SetScript("OnClick", function(self) ME.db.settings[key] = self:GetChecked() and true or false; ME.Changed() end)
         window.checks[key] = check
     end
-    Label("/mortal help  •  /mortal diagnose  •  Drag window to move", "GameFontDisableSmall", 20, -562)
+    Label("/mortal help  •  /mortal diagnose  •  Drag window to move", "GameFontDisableSmall", 20, -690)
     window:SetScript("OnShow", ME.RefreshWindow)
     window:Hide()
 end

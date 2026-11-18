@@ -14,9 +14,31 @@ end
 function Methods:SetScript(name, fn) self.scripts[name] = fn end
 function Methods:RegisterEvent(name) self.events = self.events or {}; self.events[name] = true end
 function Methods:UnregisterEvent(name) self.events[name] = nil end
+function Methods:HookScript(name, fn)
+    local previous = self.scripts[name]
+    self.scripts[name] = function(...) if previous then previous(...) end; fn(...) end
+end
+function Methods:AddLine(text, r, g, b, wrap)
+    safe(text)
+    self.lines[#self.lines + 1] = {text = text, r = r, g = g, b = b, wrap = wrap}
+end
+function Methods:GetUnit() return "ignored name", self.unitToken end
+function Methods:ClearLines()
+    self.lines = {}
+    if self.scripts.OnTooltipCleared then self.scripts.OnTooltipCleared(self) end
+end
+function Methods:RebuildFromTooltipInfo()
+    self:ClearLines()
+    self:AddLine("Original unit information")
+    TooltipDataProcessor.callback(self, {})
+end
 function Methods:SetText(text) safe(text); self.text = text end
 function Methods:GetText() return self.text end
-function Methods:Hide() self.shown = false end
+function Methods:Hide()
+    local was = self.shown
+    self.shown = false
+    if was and self.scripts.OnHide then self.scripts.OnHide(self) end
+end
 function Methods:Show()
     local was = self.shown
     self.shown = true
@@ -26,7 +48,7 @@ function Methods:IsShown() return self.shown end
 function Methods:SetShown(value) if value then self:Show() else self:Hide() end end
 function Methods:SetParent(parent) self.parent = parent end
 function Methods:IsForbidden() return self.forbidden or false end
-function Methods:GetUnit() return self.unitToken end
+
 function Methods:CreateTexture() return object("texture", self) end
 function Methods:CreateFontString() return object("font", self) end
 function Methods:SetTexture(value) safe(value); self.texture = value end
@@ -38,6 +60,7 @@ function Methods:SetEnabled(value) self.enabled = value end
 for _, name in ipairs({"SetSize", "SetPoint", "SetWidth", "SetJustifyH", "SetShadowOffset", "EnableMouse", "SetFrameStrata", "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "ClearAllPoints", "SetClampedToScreen", "SetMovable", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetAllPoints", "SetColorTexture", "SetHighlightTexture", "SetAutoFocus", "SetMaxLetters", "SetTextColor"}) do
     Methods[name] = function(...) end
 end
+function Methods:SetPoint(...) self.point = {...} end
 function CreateFrame(kind, name, parent)
     local result = object(kind, parent)
     result.name = name
@@ -46,6 +69,15 @@ function CreateFrame(kind, name, parent)
 end
 UIParent = object("root")
 UISpecialFrames, SlashCmdList = {}, {}
+Enum = { TooltipDataType = { Unit = 2 } }
+TooltipDataProcessor = { AddTooltipPostCall = function(kind, callback)
+    assert(kind == Enum.TooltipDataType.Unit)
+    TooltipDataProcessor.callback = callback
+end }
+GameTooltip = object("tooltip")
+GameTooltip.lines = {}
+GameTooltip:Hide()
+
 function print(message) messages[#messages + 1] = message end
 function GetTime() return now end
 function time() return 1795000000 + math.floor(now) end
@@ -75,7 +107,7 @@ check(not MortalEnemyCharDB, "ignore other addons")
 MortalEnemyDB = { entries = { old = { name = "Old", realm = "HomeRealm", status = "enemy" } } }
 event("ADDON_LOADED", "MortalEnemy")
 check(MortalEnemyDB == nil and next(ME.db.entries) == nil, "legacy shared data is discarded")
-check(MortalEnemyCharDB.version == 2 and SlashCmdList.MORTALENEMY, "initialization")
+check(MortalEnemyCharDB.version == 3 and SlashCmdList.MORTALENEMY, "initialization")
 local toc = assert(io.open("MortalEnemy.toc")):read("*a")
 check(toc:find("## SavedVariablesPerCharacter: MortalEnemyCharDB", 1, true), "character-specific TOC persistence")
 check(not toc:find("## SavedVariables:", 1, true), "no shared saved variables")
@@ -112,11 +144,30 @@ check(ME.Find({key = "alice", guid = "Player-other"}) == nil, "GUID conflict mus
 check(ME.Find({key = "renamed", guid = "Player-1"}) == alice, "GUID matches renamed player")
 units.nameplate1 = units.target
 plates.nameplate1 = object("plate")
+plates.nameplate1.GetUnit = function(self) return self.unitToken end
 plates.nameplate1.unitToken = "nameplate1"
 event("NAME_PLATE_UNIT_ADDED", "nameplate1")
 local badge
 for _, f in ipairs(frames) do if f.parent == plates.nameplate1 and f.icon then badge = f end end
 check(badge and badge:IsShown(), "saved player's nameplate gets badge")
+local glow
+for _, f in ipairs(frames) do if f.parent == plates.nameplate1 and f.borders then glow = f end end
+check(glow and glow:IsShown(), "saved player's nameplate gets glow")
+command("glow enemy")
+check(not glow:IsShown() and badge:IsShown(), "glow toggles independently of badge")
+check(ME.db.settings.display.rival.glow, "enemy setting does not change rival setting")
+command("glow enemy")
+check(glow:IsShown(), "glow re-enables immediately")
+command("badges enemy")
+check(not badge:IsShown() and glow:IsShown(), "badge toggles independently of glow")
+command("badges enemy")
+ME.db.settings.display.enemy.badgeText = false
+ME.Changed()
+check(badge.text:GetText() == "", "icon-only badge")
+ME.db.settings.display.enemy.badgeText = true
+ME.Changed()
+check(badge.text:GetText() == "Mortal Enemy", "badge label restored")
+
 event("PLAYER_ENTERING_WORLD")
 check(ME.units.nameplate1 and badge:IsShown(), "world transition recovers visible plates")
 plates.nameplate1.forbidden = true
@@ -131,14 +182,14 @@ for i = 1, 300 do now = now + 0.5; controller.scripts.OnUpdate(controller, 0.5) 
 check(sounds == soundCount, "continuous visibility does not repeat alert")
 units.target = nil
 event("NAME_PLATE_UNIT_REMOVED", "nameplate1")
-check(not badge:IsShown(), "removed nameplate hides badge")
+check(not badge:IsShown() and not glow:IsShown(), "removed nameplate hides badge and glow")
 now = now + 5
 event("NAME_PLATE_UNIT_ADDED", "nameplate1")
 check(sounds == soundCount + 1, "return after cooldown alerts")
 -- Recycled unit tokens must not leave a badge on the next player.
 units.nameplate1 = player("Bob", "OtherRealm", "Player-2")
 ME.UpdatePlate("nameplate1")
-check(not badge:IsShown(), "nameplate recycling")
+check(not badge:IsShown() and not glow:IsShown(), "nameplate recycling clears badge and glow")
 units.nameplate1 = player(secret, "HomeRealm", secret)
 ME.UpdatePlate("nameplate1")
 check(not badge:IsShown(), "restricted name skips matching")
@@ -172,6 +223,16 @@ command("remove Alice-HomeRealm")
 check(ME.db.entries["alice"] ~= nil, "realm suffix is not accepted when removing")
 command("list")
 check(MortalEnemyWindow:IsShown(), "window opens")
+local rivalGlowCheck
+for _, f in ipairs(frames) do
+    if f.kind == "CheckButton" and f.point and f.point[2] == 216 and f.point[3] == -568 then rivalGlowCheck = f end
+end
+check(rivalGlowCheck, "per-status display controls exist")
+rivalGlowCheck:SetChecked(false)
+rivalGlowCheck.scripts.OnClick(rivalGlowCheck)
+check(not ME.db.settings.display.rival.glow and ME.db.settings.display.enemy.glow,
+    "rival glow checkbox changes only its own setting")
+
 local row
 for _, f in ipairs(frames) do if f.key == "bob" then row = f end end
 check(row, "list row rendered")
@@ -181,31 +242,81 @@ for _, f in ipairs(frames) do if f.kind == "EditBox" then edit = f end end
 edit:SetText("New note")
 edit.scripts.OnEnterPressed(edit)
 check(ME.db.entries["bob"].note == "New note", "window saves note")
+-- Tooltip hooks operate on the tooltip's own unit, not an unrelated mouseover.
+units.tooltipunit = player("Bob", "HomeRealm", "Player-2")
+units.mouseover = player("Nobody", "HomeRealm", "Player-3")
+GameTooltip.unitToken = "tooltipunit"
+GameTooltip:Show()
+GameTooltip:RebuildFromTooltipInfo()
+check(#GameTooltip.lines == 4 and GameTooltip.lines[3].text == "Your Mortal Enemy"
+    and GameTooltip.lines[4].text == "New note", "tooltip includes status and personal note")
+TooltipDataProcessor.callback(GameTooltip, {})
+check(#GameTooltip.lines == 4, "postprocessing same tooltip does not duplicate lines")
+command("tooltip enemy")
+check(#GameTooltip.lines == 1, "disabling tooltip removes existing annotation immediately")
+command("tooltip rival")
+check(not ME.db.settings.display.rival.tooltip and not ME.db.settings.display.enemy.tooltip, "per-status tooltip settings independent")
+command("tooltip enemy")
+check(#GameTooltip.lines == 4, "re-enabling tooltip updates current hover")
+ME.db.settings.display.enemy.tooltipNote = false
+ME.Changed()
+check(#GameTooltip.lines == 3, "tooltip note can be hidden independently")
+ME.db.settings.display.enemy.tooltipNote = true
+ME.Changed()
+units.tooltipunit = player("Bob", "OtherRealm", "Player-2")
+GameTooltip:RebuildFromTooltipInfo()
+check(#GameTooltip.lines == 1, "off-realm tooltip excluded")
+units.tooltipunit = {player = false, name = "Wolf"}
+GameTooltip:RebuildFromTooltipInfo()
+check(#GameTooltip.lines == 1, "NPC tooltip excluded")
+units.tooltipunit = player(secret, "", secret)
+GameTooltip:RebuildFromTooltipInfo()
+check(#GameTooltip.lines == 1, "restricted tooltip identity skipped")
+GameTooltip.unitToken = secret
+GameTooltip:RebuildFromTooltipInfo()
+check(#GameTooltip.lines == 1, "restricted tooltip token skipped")
+GameTooltip.unitToken = "tooltipunit"
+units.tooltipunit = player("Bob", "", "Player-2")
+GameTooltip:RebuildFromTooltipInfo()
+command("remove Bob")
+check(#GameTooltip.lines == 1, "removing entry removes current tooltip annotation")
+GameTooltip:Hide()
 command("sound")
 check(not ME.db.settings.sound, "sound toggle")
 command("badges")
 check(not badge:IsShown(), "disable badges hides existing")
 command("preview")
-command("remove Bob")
 check(not ME.db.entries["bob"], "remove named player")
 check(#ME.Note(string.rep("a", 241)) == 240, "ASCII note limit")
 check(ME.Note(string.rep("a", 239) .. "é") == string.rep("a", 239), "UTF-8 note truncation")
 check(#ME.Note(string.rep("é", 121)) == 240, "UTF-8 boundary at limit")
+-- Preserve the old badge preference when initializing the new display options.
+local configuredDisplay = ME.db.settings.display
+ME.db.settings.display = nil
+ME.db.settings.badges = false
+ME.InitDB()
+check(not ME.db.settings.display.enemy.badge and not ME.db.settings.display.rival.badge,
+    "legacy disabled badges migrate without re-enabling")
+check(ME.db.settings.display.enemy.glow and ME.db.settings.display.enemy.tooltip, "new display options default enabled")
+ME.db.settings.display = configuredDisplay
 local saved = MortalEnemyCharDB
 ME.InitDB()
 check(MortalEnemyCharDB == saved and ME.db.entries["alice"], "initialization preserves saved records")
 -- Simulate WoW supplying a separate SavedVariables table for another character.
 MortalEnemyCharDB = nil
 ME.InitDB()
-check(next(ME.db.entries) == nil and ME.db.settings.sound, "new character gets independent empty list and default settings")
+check(next(ME.db.entries) == nil and ME.db.settings.sound and ME.db.settings.display.enemy.badge
+    and ME.db.settings.display.enemy.tooltip, "new character gets independent empty list and default settings")
+ME.db.settings.display.enemy.tooltip = false
 command("add rival Charlie Another story")
 check(not saved.entries.charlie and saved.entries.alice, "second character cannot change first character's list")
 MortalEnemyCharDB = saved
 ME.InitDB()
-check(ME.db.entries.alice and not ME.db.entries.charlie and not ME.db.settings.sound, "returning character restores their own list and settings")
+check(ME.db.entries.alice and not ME.db.entries.charlie and not ME.db.settings.sound
+    and ME.db.settings.display.enemy.tooltip, "returning character restores their own list and display settings")
 command("remove Alice")
 check(next(ME.db.entries) == nil, "remove final entry")
 ME.db.entries.bad = {status = "invalid"}
 ME.InitDB()
 check(next(ME.db.entries) == nil, "malformed records ignored")
-io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, commands, UI, per-character persistence, current-realm enforcement\n")
+io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/glows/tooltips, tooltip lifecycle, commands, UI, per-character persistence, current-realm enforcement\n")
