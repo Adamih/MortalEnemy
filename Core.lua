@@ -70,6 +70,15 @@ function ME.InitDB()
             if type(entry.guid) ~= "string" then entry.guid = nil end
             if type(entry.lastSeen) ~= "number" then entry.lastSeen = nil end
             if type(entry.lastZone) ~= "string" then entry.lastZone = nil end
+            for _, field in ipairs({ "class", "race", "level" }) do
+                local valid = field == "level" and type(entry[field]) == "number" and entry[field] > 0
+                    and entry[field] < math.huge and entry[field] % 1 == 0
+                    or field ~= "level" and type(entry[field]) == "string" and entry[field] ~= ""
+                local stamp = field .. "ObservedAt"
+                if not valid then entry[field], entry[stamp] = nil, nil end
+                if type(entry[stamp]) ~= "number" or entry[stamp] ~= entry[stamp]
+                    or entry[stamp] == math.huge or entry[stamp] == -math.huge then entry[stamp] = nil end
+            end
         end
     end
 end
@@ -112,6 +121,44 @@ function ME.Find(identity)
         end
     end
 end
+local characterRefresh = {}
+function ME.ReadCharacterInfo(unit)
+    local info, observed = {}, time()
+    for key, api in pairs({ class = UnitClass, race = UnitRace }) do
+        local value = ME.Read(api, unit)
+        if type(value) == "string" and value ~= "" and value ~= UNKNOWN and value ~= UNKNOWNOBJECT then
+            info[key], info[key .. "ObservedAt"] = value, observed
+        end
+    end
+    local level = ME.Read(UnitLevel, unit)
+    if type(level) == "number" and level > 0 and level < math.huge and level % 1 == 0 then
+        info.level, info.levelObservedAt = level, observed
+    end
+    return info
+end
+function ME.ApplyCharacterInfo(entry, info)
+    if type(info) ~= "table" then return false end
+    local changed = false
+    for _, key in ipairs({ "class", "race", "level" }) do
+        local stamp = key .. "ObservedAt"
+        if info[key] ~= nil and info[stamp] and (not entry[stamp] or info[stamp] >= entry[stamp]) then
+            if entry[key] ~= info[key] or entry[stamp] ~= info[stamp] then changed = true end
+            entry[key], entry[stamp] = info[key], info[stamp]
+        end
+    end
+    return changed
+end
+function ME.RefreshCharacterInfo(unit, force)
+    local identity = ME.Identity(unit)
+    local entry, key = ME.Find(identity)
+    if not entry then return end
+    local now = GetTime()
+    if not force and characterRefresh[key] and now - characterRefresh[key] < 5 then return end
+    characterRefresh[key] = now
+    local changed = ME.ApplyCharacterInfo(entry, ME.ReadCharacterInfo(unit))
+    if not entry.guid and identity.guid then entry.guid = identity.guid end
+    if changed and ME.RefreshWindow then ME.RefreshWindow() end
+end
 function ME.Changed()
     if ME.RefreshWorld then ME.RefreshWorld() end
     if ME.RefreshWindow then ME.RefreshWindow() end
@@ -127,6 +174,7 @@ function ME.Save(identity, status, note)
     entry.name, entry.status = identity.name, status
     entry.guid = identity.guid or entry.guid
     if note ~= nil then entry.note = ME.Note(note) end
+    ME.ApplyCharacterInfo(entry, identity.characterInfo)
     ME.db.entries[identity.key] = entry
     ME.Print(entry.name .. " is now your " .. ME.styles[status].label .. ".")
     ME.Changed()
@@ -148,6 +196,7 @@ function ME.MarkTarget(status, note)
         ME.Print(reason or "Target a player on your realm first.")
         return
     end
+    identity.characterInfo = ME.ReadCharacterInfo("target")
     return ME.Save(identity, status, note)
 end
 function ME.Remove(key)

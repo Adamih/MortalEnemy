@@ -141,6 +141,9 @@ function UnitIsSameServer(name)
     return false
 end
 function UnitGUID(unit) return units[unit] and units[unit].guid end
+function UnitClass(unit) return units[unit] and units[unit].class end
+function UnitRace(unit) return units[unit] and units[unit].race end
+function UnitLevel(unit) return units[unit] and units[unit].level end
 function UnitIsUnit(a, b) return units[a] ~= nil and units[a] == units[b] end
 function PlaySound() sounds = sounds + 1 end
 C_NamePlate = {
@@ -522,4 +525,62 @@ check(book.search:GetText() == "" and book.filterTabs[1].active and book.selecti
     "selecting newly added entry clears filters and displays its details")
 book.search:SetText("No results")
 check(book.scrollOffset == 0 and not book.scrollbar:IsShown(), "filter shrink resets scroll and hides scrollbar")
+-- Character details are snapshots from the saved player's readable target.
+local profileTarget = player("Profile Example", "HomeRealm", "Player-profile")
+profileTarget.class, profileTarget.race, profileTarget.level = "Warlock", "Human", 20
+units.target = profileTarget
+ME.MarkTarget("enemy", "Keep my note")
+local profileEntry = ME.db.entries["profile example"]
+check(profileEntry.class == "Warlock" and profileEntry.race == "Human" and profileEntry.level == 20,
+    "mark target captures class race and level")
+ME.SelectEntry("profile example")
+check(book.characterInfo:GetText() == "Level 20 • Human • Warlock" and book.characterUpdated:GetText():find("Race observed:", 1, true),
+    "detail pane displays snapshot and field observation dates")
+local previousStamp = profileEntry.levelObservedAt
+now = now + 10
+profileTarget.level = 27
+event("PLAYER_TARGET_CHANGED")
+check(profileEntry.level == 27 and profileEntry.levelObservedAt > previousStamp
+    and book.characterInfo:GetText():find("Level 27", 1, true), "retarget updates saved level and visible details")
+local levelStamp, raceStamp, classStamp = profileEntry.levelObservedAt, profileEntry.raceObservedAt, profileEntry.classObservedAt
+now = now + 10
+profileTarget.level, profileTarget.race, profileTarget.class = secret, secret, secret
+event("PLAYER_TARGET_CHANGED")
+check(profileEntry.level == 27 and profileEntry.race == "Human" and profileEntry.class == "Warlock"
+    and profileEntry.levelObservedAt == levelStamp and profileEntry.raceObservedAt == raceStamp
+    and profileEntry.classObservedAt == classStamp, "restricted fields preserve last values and their original timestamps")
+profileTarget.level, profileTarget.race, profileTarget.class = -1, nil, "Mage"
+event("PLAYER_TARGET_CHANGED")
+check(profileEntry.class == "Mage" and profileEntry.classObservedAt > classStamp
+    and profileEntry.level == 27 and profileEntry.levelObservedAt == levelStamp
+    and profileEntry.raceObservedAt == raceStamp, "partial update preserves unavailable fields and dates")
+profileTarget.level = 28
+event("UNIT_LEVEL", "target")
+check(profileEntry.level == 28, "level event refreshes current target")
+profileTarget.level = 29
+now = now + 6
+ME.UpdateTarget()
+check(profileEntry.level == 29, "held target retries and refreshes through throttled polling")
+units.target = player("Not Saved", "HomeRealm", "Player-unknown")
+units.target.level = 55
+event("PLAYER_TARGET_CHANGED")
+check(profileEntry.level == 29 and not ME.db.entries["not saved"], "untracked targets do not alter or create entries")
+ME.AddNamedPlayer("Manual Example", "rival")
+check(not ME.db.entries["manual example"].level, "manual name entry starts with unknown details")
+units.target = player("Manual Example", "HomeRealm", "Player-manual")
+units.target.class, units.target.race, units.target.level = "Priest", "Dwarf", 23
+event("PLAYER_TARGET_CHANGED")
+check(ME.db.entries["manual example"].level == 23 and ME.db.entries["manual example"].race == "Dwarf", "targeting fills manually added profile")
+-- Right-click data belongs to the player at menu-open time, even after retargeting.
+units.target = player("Menu Example", "HomeRealm", "Player-menu")
+units.target.class, units.target.race, units.target.level = "Rogue", "Orc", 31
+buttons = {}
+menuCallbacks.MENU_UNIT_ENEMY_PLAYER(nil, root, {unit = "target"})
+units.target = profileTarget
+buttons["Mark as Rival"]()
+check(ME.db.entries["menu example"].level == 31 and ME.db.entries["menu example"].race == "Orc", "menu captures original player's character details")
+check(profileEntry.note == "Keep my note", "automatic detail refresh never changes personal notes")
+ME.InitDB()
+check(ME.db.entries["profile example"].level == 29 and ME.db.entries["profile example"].class == "Mage",
+    "recorded character info survives database reinitialization")
 io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, settings category, target strip, player menus, add-by-name form, per-character persistence, current-realm enforcement\n")

@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.5.0 targets interface 16001.
+The other player does not need the addon. Version 0.6.0 targets interface 16001.
 
 ## First run
 
@@ -46,6 +46,25 @@ date added, and an editable grudge. Save the note or change/remove their relatio
 from that pane. Adding a player clears search/filters and scrolls to their entry.
 The target strip remains above both panes, and Add player uses matching native
 window chrome. Settings stay on WoW's separate AddOns preferences page.
+
+## Character information
+
+The detail pane shows the last recorded **level, race, and class**, with a separate
+observation time for each field. Unknown fields stay labelled unknown until the
+game provides them. These are observed snapshots, not remote live lookups.
+
+Marking your target captures the readable fields immediately. Marking from a
+player menu captures them while the menu opens, so a later target change cannot
+save another player's details. Name-only additions start without character data
+unless that player is already your current target.
+
+Targeting a saved player refreshes the snapshot immediately. The addon retries
+every five seconds while they remain targeted and responds to target level/name
+updates. This works without an available nameplate when the target's identity is
+readable. Missing, restricted, invalid, or unknown fields never erase the previous
+values or advance those fields' observation dates. Personal notes and relationship
+status are not changed by these updates. There is no background lookup of offline
+players or character-data polling of arbitrary nearby units.
 
 ## Adding players
 
@@ -163,7 +182,9 @@ them untargeted but their nameplate visible, and during combat. The output repor
 - [ ] Loads without Lua errors; `/mortal` opens and closes the book.
 - [ ] Native portrait frame, inset panes, and tabs render correctly.
 - [ ] List scrolls with the wheel/scrollbar; search and status tabs combine.
-- [ ] Selecting a row shows its sighting history and editable note in the right pane.
+- [ ] Selecting a row shows class, race, level, sighting history, and its editable note.
+- [ ] Targeting a saved player updates readable character fields and their dates.
+- [ ] Restricted/missing fields retain their previous values and observation dates.
 - [ ] Settings button opens the actual WoW AddOns preferences page.
 - [ ] Player right-click actions mark the clicked character after retargeting.
 - [ ] Add-by-name form validates first/last name and saves optional notes.

@@ -79,7 +79,7 @@ frame:SetScript("OnEvent", function(self, event, unit)
         SLASH_MORTALENEMY1 = "/mortal"
         SLASH_MORTALENEMY2 = "/mortalenemy"
         SlashCmdList.MORTALENEMY = Command
-        for _, name in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "UPDATE_MOUSEOVER_UNIT", "PLAYER_REGEN_ENABLED" }) do
+        for _, name in ipairs({ "PLAYER_ENTERING_WORLD", "NAME_PLATE_UNIT_ADDED", "NAME_PLATE_UNIT_REMOVED", "PLAYER_TARGET_CHANGED", "UNIT_LEVEL", "UNIT_NAME_UPDATE", "UPDATE_MOUSEOVER_UNIT", "PLAYER_REGEN_ENABLED" }) do
             self:RegisterEvent(name)
         end
         ME.Print("Loaded. Click the skull on your minimap to open your book. /mortal help for commands.")
@@ -91,6 +91,11 @@ frame:SetScript("OnEvent", function(self, event, unit)
     elseif event == "NAME_PLATE_UNIT_REMOVED" then
         if ME.IsSecret(unit) or type(unit) ~= "string" then return end
         ME.RemovePlate(unit)
+    elseif event == "PLAYER_TARGET_CHANGED" then
+        ME.RefreshCharacterInfo("target", true)
+        ME.RefreshWorld()
+    elseif event == "UNIT_LEVEL" or event == "UNIT_NAME_UPDATE" then
+        if not ME.IsSecret(unit) and unit == "target" then ME.RefreshCharacterInfo("target", true) end
     elseif event == "UPDATE_MOUSEOVER_UNIT" then
         local entry, key = ME.Find(ME.Identity("mouseover"))
         if entry then ME.Observe(entry, key) end
@@ -133,6 +138,7 @@ function ME.InitPlayerMenus()
                 if ME.Read(UnitIsUnit, context.unit, "player") == true then return end
                 local ok, guid = pcall(UnitGUID, context.unit)
                 if not ok or ME.IsSecret(guid) then return end
+                if identity then identity.characterInfo = ME.ReadCharacterInfo(context.unit) end
             else
                 local name = context.name
                 if type(name) == "string" and not name:find("%s") and type(context.surname) == "string" and context.surname ~= "" then

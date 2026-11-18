@@ -114,7 +114,10 @@ function ME.UpdateTarget()
     -- Targeting can still record/announce an encounter, but never creates a
     -- second badge at a fixed screen position. Status belongs to the nameplate.
     local entry, key = ME.Find(ME.Identity("target"))
-    if entry then ME.Observe(entry, key) end
+    if entry then
+        ME.Observe(entry, key)
+        ME.RefreshCharacterInfo("target")
+    end
 end
 function ME.SeedNameplates()
     -- Recover already-visible plates after /reload or a world transition.
