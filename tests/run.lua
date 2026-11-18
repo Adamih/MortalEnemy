@@ -34,6 +34,7 @@ function Methods:RebuildFromTooltipInfo()
 end
 function Methods:SetText(text) safe(text); self.text = text end
 function Methods:GetText() return self.text end
+function Methods:GetStringWidth() return #self.text * 6 end
 function Methods:Hide()
     local was = self.shown
     self.shown = false
@@ -176,6 +177,9 @@ check(ME.Find({key = "alice redfen", guid = "Player-other"}) == nil, "GUID confl
 check(ME.Find({key = "renamed", guid = "Player-1"}) == alice, "GUID matches renamed player")
 units.nameplate1 = units.target
 plates.nameplate1 = object("plate")
+plates.nameplate1.UnitFrame = object("unitframe", plates.nameplate1)
+plates.nameplate1.UnitFrame.HealthBarsContainer = { healthBar = object("healthbar", plates.nameplate1.UnitFrame) }
+plates.nameplate1.UnitFrame.name = object("font", plates.nameplate1.UnitFrame)
 plates.nameplate1.GetUnit = function(self) return self.unitToken end
 plates.nameplate1.unitToken = "nameplate1"
 event("NAME_PLATE_UNIT_ADDED", "nameplate1")
@@ -185,6 +189,16 @@ check(badge and badge:IsShown(), "saved player's nameplate gets badge")
 local glow
 for _, f in ipairs(frames) do if f.parent == plates.nameplate1 and f.borders then glow = f end end
 check(glow and glow:IsShown(), "saved player's nameplate gets glow")
+check(glow.point[2] == plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar, "glow hugs health bar, not oversized plate root")
+check(badge.point[2] == plates.nameplate1.UnitFrame.name and badge.point[1] == "BOTTOM", "badge centered above the player name")
+for _, f in ipairs(frames) do check(not (f.parent == UIParent and f.icon and type(f.text) == "table"), "no duplicate fixed-screen target badge") end
+local bar = plates.nameplate1.UnitFrame.HealthBarsContainer.healthBar
+bar:Hide()
+ME.RefreshWorld()
+check(not glow:IsShown() and badge:IsShown(), "name-only plates keep badge without a floating glow box")
+bar:Show()
+ME.RefreshWorld()
+
 command("glow enemy")
 check(not glow:IsShown() and badge:IsShown(), "glow toggles independently of badge")
 check(ME.db.settings.display.rival.glow, "enemy setting does not change rival setting")

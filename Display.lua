@@ -1,14 +1,14 @@
 local _, ME = ...
 ME.units = {}
 local badges, glows, encounters = {}, {}, {}
-local glowAlpha = { 0.9, 0.3, 0.12 }
-local notice, targetBadge
+local glowAlpha = { 0.75, 0.22, 0.08 }
+local notice
 local function MakeBadge(parent)
     local badge = CreateFrame("Frame", nil, parent)
-    badge:SetSize(180, 26)
+    badge:SetSize(18, 18)
     badge:EnableMouse(false)
     badge.icon = badge:CreateTexture(nil, "OVERLAY")
-    badge.icon:SetSize(24, 24)
+    badge.icon:SetSize(18, 18)
     badge.icon:SetPoint("LEFT")
     badge.text = badge:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     badge.text:SetPoint("LEFT", badge.icon, "RIGHT", 4, 0)
@@ -21,6 +21,8 @@ local function Paint(badge, entry)
     badge.icon:SetTexture(style.icon)
     badge.text:SetText(ME.db.settings.display[entry.status].badgeText and style.label or "")
     badge.text:SetTextColor(style.r, style.g, style.b)
+    local textWidth = ME.Read(badge.text.GetStringWidth, badge.text) or 0
+    badge:SetSize(18 + (textWidth > 0 and (4 + math.ceil(textWidth)) or 0), 18)
     badge:Show()
 end
 function ME.ShowNotice(entry, preview)
@@ -81,18 +83,30 @@ local function MakeGlow(parent)
     -- All borders belong to us: no edits to the plate's health bar or textures.
     local glow = CreateFrame("Frame", nil, parent)
     glow:EnableMouse(false)
-    glow:SetPoint("TOPLEFT", parent, "TOPLEFT", -2, 2)
-    glow:SetPoint("BOTTOMRIGHT", parent, "BOTTOMRIGHT", 2, -2)
     glow.borders = {}
-    for i, padding in ipairs({ 0, 3, 7 }) do
+    for i, padding in ipairs({ 0, 1, 3 }) do
         local border = CreateFrame("Frame", nil, glow, "BackdropTemplate")
         border:EnableMouse(false)
         border:SetPoint("TOPLEFT", glow, "TOPLEFT", -padding, padding)
         border:SetPoint("BOTTOMRIGHT", glow, "BOTTOMRIGHT", padding, -padding)
-        border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = i == 1 and 2 or 4 })
+        border:SetBackdrop({ edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = i == 1 and 1 or 2 })
         glow.borders[i] = border
     end
     return glow
+end
+local function VisualAnchors(plate)
+    local frame = plate.UnitFrame
+    if not frame or (frame.IsForbidden and frame:IsForbidden()) then return nil end
+    -- Forever's root plate includes reserved space for names, auras, and casts.
+    -- The visible health bar is much smaller than that root rectangle.
+    local container = frame.HealthBarsContainer
+    local healthBar = (container and container.healthBar) or frame.healthBar
+    if healthBar and healthBar.IsForbidden and healthBar:IsForbidden() then healthBar = nil end
+    if healthBar and ME.Read(healthBar.IsShown, healthBar) ~= true then healthBar = nil end
+    local name = frame.name
+    if name and name.IsForbidden and name:IsForbidden() then name = nil end
+    if name and ME.Read(name.IsShown, name) ~= true then name = nil end
+    return healthBar, name
 end
 function ME.UpdatePlate(unit)
     local badge, glow = badges[unit], glows[unit]
@@ -106,24 +120,21 @@ function ME.UpdatePlate(unit)
     if not options.badge and not options.glow then return end
     local plate = ME.Read(C_NamePlate and C_NamePlate.GetNamePlateForUnit, unit)
     if not plate or (plate.IsForbidden and plate:IsForbidden()) then return end
-    if options.badge then
+    local healthBar, nameAnchor = VisualAnchors(plate)
+    local badgeAnchor = nameAnchor or healthBar
+    if options.badge and badgeAnchor then
         if not badge then badge = MakeBadge(plate); badges[unit] = badge end
         badge:SetParent(plate)
         badge:ClearAllPoints()
-        if options.badgeText then
-            badge:SetSize(180, 26)
-        else
-            badge:SetSize(24, 26)
-        end
-        badge:SetPoint("BOTTOM", plate, "TOP", 0, 8)
+        badge:SetPoint("BOTTOM", badgeAnchor, "TOP", 0, 3)
         Paint(badge, entry)
     end
-    if options.glow then
+    if options.glow and healthBar then
         if not glow then glow = MakeGlow(plate); glows[unit] = glow end
         glow:SetParent(plate)
         glow:ClearAllPoints()
-        glow:SetPoint("TOPLEFT", plate, "TOPLEFT", -2, 2)
-        glow:SetPoint("BOTTOMRIGHT", plate, "BOTTOMRIGHT", 2, -2)
+        glow:SetPoint("TOPLEFT", healthBar, "TOPLEFT", -2, 2)
+        glow:SetPoint("BOTTOMRIGHT", healthBar, "BOTTOMRIGHT", 2, -2)
         local style = ME.styles[entry.status]
         for i, border in ipairs(glow.borders) do
             border:SetBackdropBorderColor(style.r, style.g, style.b, glowAlpha[i])
@@ -137,18 +148,10 @@ function ME.RemovePlate(unit)
     if glows[unit] then glows[unit]:Hide() end
 end
 function ME.UpdateTarget()
-    if targetBadge then targetBadge:Hide() end
+    -- Targeting can still record/announce an encounter, but never creates a
+    -- second badge at a fixed screen position. Status belongs to the nameplate.
     local entry, key = ME.Find(ME.Identity("target"))
-    if not entry then return end
-    ME.Observe(entry, key)
-    if not ME.db.settings.display[entry.status].badge then return end
-    if not targetBadge then
-        targetBadge = MakeBadge(UIParent)
-        -- Independent of Blizzard's protected target frame and other addon layouts.
-        targetBadge:SetPoint("TOP", UIParent, "TOP", 0, -80)
-    end
-    Paint(targetBadge, entry)
-    targetBadge.text:SetText(ME.styles[entry.status].label .. ": " .. entry.name)
+    if entry then ME.Observe(entry, key) end
 end
 function ME.SeedNameplates()
     -- Recover already-visible plates after /reload or a world transition.

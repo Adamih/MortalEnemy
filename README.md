@@ -18,8 +18,8 @@ The addon is already installed when this folder is at
 4. Enable the appropriate friendly/enemy nameplates in WoW's own settings. The
    addon does not change your nameplate settings.
 5. Look for an **amber sword + Rival** or **red skull + Mortal Enemy** badge above
-   their nameplate. Your selected rival also gets a status line near the top
-   center of the screen.
+   their nameplate. There is no separate persistent status badge at the top of
+   the screen.
 
 The book lets you select an entry, edit its note, change its status, remove it,
 and customize displays separately for rivals and mortal enemies. It is draggable
@@ -61,10 +61,11 @@ their note unless you provide a replacement.
 Open `/mortal` and use the **Open World Display** section. Each row controls
 one status independently, using amber for rivals and red for mortal enemies:
 
-- **Badge:** sword/skull icon above a recognized nameplate. Also controls the
-  existing target status line.
-- **Glow:** a static, layered colored outline around the nameplate. It uses
+- **Badge:** a compact sword/skull icon centered above the player's name.
+  Targeting the player does not create a second badge elsewhere on screen.
+- **Glow:** a subtle, layered outline fitted to the visible health bar. It uses
   addon-owned borders and does not recolor or replace the underlying health bar.
+  On name-only plates with a hidden health bar, no outline is drawn.
 - **Tooltip:** adds your relationship to the normal player mouseover tooltip.
 - **Badge text:** show the relationship label next to the nameplate icon, or
   keep only the icon.
