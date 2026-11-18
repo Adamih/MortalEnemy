@@ -57,6 +57,7 @@ function Methods:SetChecked(value) self.checked = value end
 function Methods:GetChecked() return self.checked end
 function Methods:HasFocus() return self.focused or false end
 function Methods:ClearFocus() self.focused = false end
+function Methods:SetFocus() self.focused = true end
 function Methods:SetEnabled(value) self.enabled = value end
 function Methods:GetWidth() return 160 end
 function Methods:GetHeight() return 160 end
@@ -126,6 +127,19 @@ C_NamePlate = {
     GetNamePlateForUnit = function(unit) return plates[unit] end,
     GetNamePlates = function() local result = {}; for _, plate in pairs(plates) do result[#result + 1] = plate end; return result end,
 }
+local menuCallbacks = {}
+Menu = { ModifyMenu = function(tag, fn) menuCallbacks[tag] = fn end }
+local registeredSettings
+Settings = {
+    RegisterCanvasLayoutCategory = function(panel, name)
+        registeredSettings = panel
+        return { GetID = function() return 42 end }
+    end,
+    RegisterAddOnCategory = function() end,
+    OpenToCategory = function(id) assert(id == 42); registeredSettings:Show() end,
+}
+function HideUIPanel(panel) panel:Hide() end
+function InCombatLockdown() return false end
 local ME = {}
 for _, file in ipairs({"Core.lua", "Display.lua", "Window.lua", "MortalEnemy.lua"}) do assert(loadfile(file))("MortalEnemy", ME) end
 local controller = frames[#frames]
@@ -149,10 +163,9 @@ launcher.scripts.OnClick(launcher)
 check(MortalEnemyWindow:IsShown(), "minimap click opens panel")
 launcher.scripts.OnClick(launcher)
 check(not MortalEnemyWindow:IsShown(), "minimap click closes panel")
-local visibilityCheck
-for _, f in ipairs(frames) do
-    if f.kind == "CheckButton" and f.point and f.point[2] == 300 and f.point[3] == -646 then visibilityCheck = f end
-end
+ME.OpenSettings()
+check(MortalEnemySettingsPanel:IsShown() and not MortalEnemyWindow:IsShown(), "settings open in registered AddOns category")
+local visibilityCheck = MortalEnemySettingsPanel.checks.showMinimap
 check(visibilityCheck and visibilityCheck:GetChecked(), "minimap visibility control defaults on")
 visibilityCheck:SetChecked(false)
 visibilityCheck.scripts.OnClick(visibilityCheck)
@@ -312,10 +325,7 @@ command("remove Alice-HomeRealm")
 check(ME.db.entries["alice redfen"] ~= nil, "realm suffix is not accepted when removing")
 command("list")
 check(MortalEnemyWindow:IsShown(), "window opens")
-local rivalBadgeCheck
-for _, f in ipairs(frames) do
-    if f.kind == "CheckButton" and f.point and f.point[2] == 180 and f.point[3] == -568 then rivalBadgeCheck = f end
-end
+local rivalBadgeCheck = MortalEnemySettingsPanel.displayChecks.rival.badge
 check(rivalBadgeCheck, "per-status display controls exist")
 rivalBadgeCheck:SetChecked(false)
 rivalBadgeCheck.scripts.OnClick(rivalBadgeCheck)
@@ -326,7 +336,7 @@ for _, f in ipairs(frames) do if f.key == "bob stone" then row = f end end
 check(row, "list row rendered")
 row.scripts.OnClick(row)
 local edit
-for _, f in ipairs(frames) do if f.kind == "EditBox" then edit = f end end
+for _, f in ipairs(frames) do if f.kind == "EditBox" and f.parent == MortalEnemyWindow then edit = f end end
 edit:SetText("New note")
 edit.scripts.OnEnterPressed(edit)
 check(ME.db.entries["bob stone"].note == "New note", "window saves note")
@@ -412,4 +422,58 @@ check(next(ME.db.entries) == nil, "remove final entry")
 ME.db.entries.bad = {status = "invalid"}
 ME.InitDB()
 check(next(ME.db.entries) == nil, "malformed records ignored")
-io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, per-character persistence, current-realm enforcement\n")
+-- Target strip follows target changes and never enables actions for NPCs/self.
+units.target = player("Alice", "HomeRealm", "Player-1")
+event("PLAYER_TARGET_CHANGED")
+if not MortalEnemyWindow:IsShown() then command("list") end
+check(MortalEnemyWindow.targetName:GetText():find("Alice Redfen", 1, true)
+    and MortalEnemyWindow.targetButtons[1].enabled, "target strip names eligible target")
+units.target = units.player
+event("PLAYER_TARGET_CHANGED")
+check(not MortalEnemyWindow.targetButtons[1].enabled, "self target disables mark buttons")
+-- Right-click callback captures the player before the target changes.
+units.target = player("Alice", "HomeRealm", "Player-1")
+local buttons = {}
+local root = {
+    CreateDivider = function() end, CreateTitle = function() end,
+    CreateButton = function(_, text, callback) buttons[text] = callback end,
+}
+menuCallbacks.MENU_UNIT_PLAYER(nil, root, { unit = "target" })
+check(buttons["Mark as Rival"] and buttons["Mark as Mortal Enemy"], "player menu offers both relationships")
+units.target = player("Bob", "HomeRealm", "Player-2")
+buttons["Mark as Rival"]()
+check(ME.db.entries["alice redfen"] and not ME.db.entries["bob stone"], "menu marks original player after retarget")
+buttons = {}
+menuCallbacks.MENU_UNIT_PLAYER(nil, root, { unit = "player", isSelf = true })
+check(next(buttons) == nil, "self menu unchanged")
+units.target = player("Bob", "OtherRealm", "Player-2")
+local nativeSameServer = UnitIsSameServer
+UnitIsSameServer = function() return false end
+menuCallbacks.MENU_UNIT_ENEMY_PLAYER(nil, root, { unit = "target" })
+check(next(buttons) == nil, "off-realm menu unchanged")
+UnitIsSameServer = nativeSameServer
+menuCallbacks.MENU_UNIT_PLAYER(nil, root, { name = secret })
+check(next(buttons) == nil, "restricted menu unchanged")
+local oldCombat = InCombatLockdown
+InCombatLockdown = function() return true end
+menuCallbacks.MENU_UNIT_PLAYER(nil, root, {unit = "target"})
+check(next(buttons) == nil, "combat menu left unchanged")
+InCombatLockdown = oldCombat
+-- Add-by-name form supports validation, both statuses, and optional notes.
+ME.ShowAddPlayer()
+local dialog = MortalEnemyAddDialog
+local addRival, addEnemy
+for _, f in ipairs(frames) do
+    if f.parent == dialog and f.text == "Add Rival" then addRival = f end
+    if f.parent == dialog and f.text == "Add Mortal Enemy" then addEnemy = f end
+end
+addRival.scripts.OnClick(addRival)
+check(dialog:IsShown() and dialog.error:GetText() ~= "", "invalid name keeps form open with explanation")
+dialog.first:SetText("Charlie")
+dialog.last:SetText("Story")
+dialog.note:SetText("An old grudge")
+addEnemy.scripts.OnClick(addEnemy)
+check(not dialog:IsShown() and ME.db.entries["charlie story"].status == "enemy"
+    and ME.db.entries["charlie story"].note == "An old grudge", "name form saves relationship and note")
+check(MortalEnemyWindow:IsShown(), "adding by name returns to nemesis list")
+io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, settings category, target strip, player menus, add-by-name form, per-character persistence, current-realm enforcement\n")

@@ -115,6 +115,7 @@ end
 function ME.Changed()
     if ME.RefreshWorld then ME.RefreshWorld() end
     if ME.RefreshWindow then ME.RefreshWindow() end
+    if ME.RefreshSettings then ME.RefreshSettings() end
     if ME.RefreshTooltip then ME.RefreshTooltip() end
     if ME.UpdateMinimap then ME.UpdateMinimap() end
 end
@@ -130,6 +131,15 @@ function ME.Save(identity, status, note)
     ME.Print(entry.name .. " is now your " .. ME.styles[status].label .. ".")
     ME.Changed()
     return identity.key
+end
+function ME.AddNamedPlayer(name, status, note)
+    if not ME.styles[status] then return nil, "Choose Rival or Mortal Enemy." end
+    name = ME.Trim(name):gsub("%s+", " ")
+    local first, last = name:match("^(%S+) (%S+)$")
+    if not first or not last or not ME.Key(name) then return nil, "Enter a first and last name, without a realm suffix." end
+    local ownName = ME.Read(GetUnitName, "player", true)
+    if ownName and ME.Key(ownName) == ME.Key(name) then return nil, "Choose another player first." end
+    return ME.Save({ key = ME.Key(name), name = name }, status, note)
 end
 function ME.MarkTarget(status, note)
     if ME.Read(UnitIsUnit, "target", "player") == true then ME.Print("Choose another player first."); return end

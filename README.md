@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.3.1 targets interface 16001.
+The other player does not need the addon. Version 0.4.0 targets interface 16001.
 
 ## First run
 
@@ -13,25 +13,43 @@ The addon is already installed when this folder is at
    Enemy** in the character selection AddOns list. Subsequent Lua edits need only
    `/reload`.
 2. Enter the game. Look for the Mortal Enemy loaded message.
-3. Click the **skull button on your minimap** to open the book. Target another
-   player and click **Target:
-   Rival** or **Target: Mortal Enemy**.
+3. Click the **skull button on your minimap** to open the book. The target strip
+   shows the full name of your selected player; click **Mark as Rival** or
+   **Mark as Mortal Enemy**. The buttons are disabled for yourself, NPCs, and
+   players whose identity or realm cannot be verified.
 4. Enable the appropriate friendly/enemy nameplates in WoW's own settings. The
    addon does not change your nameplate settings.
-5. Look for an **sword** (rival) or **skull** (mortal enemy) icon just left of
+5. Look for a **sword** (rival) or **skull** (mortal enemy) icon just left of
    their health bar. There is no separate persistent status badge at the top of
    the screen.
 
-The book lets you select an entry, edit its note, change its status, remove it,
-and customize displays separately for rivals and mortal enemies. It is draggable
-and closes with Escape.
+The book lets you select an entry, edit its note, change its status, and remove it.
+Click **Settings** to open the addon preferences in WoW's Settings → AddOns →
+Mortal Enemy page. Preferences remain separate for rivals and mortal enemies.
+The book is draggable and closes with Escape.
 Type `/mortal preview` to preview the encounter alert without adding anyone.
 
 Click the minimap skull again to close the panel. Drag it around the minimap edge
 to move it out of the way; the position is saved independently for each character.
-Hover it for instructions. Uncheck **Show minimap button** at the bottom of the
-panel to hide it. This preference is saved per character; use `/mortal` to open
-the panel and enable the button again.
+Hover it for instructions. Uncheck **Show minimap button** on the AddOns settings
+page to hide it. This preference is saved per character; use `/mortal settings`
+to open the preferences and enable the button again.
+
+## Adding players
+
+- **Player right-click menu:** right-click a player portrait or supported player
+  menu and choose **Mark as Rival** or **Mark as Mortal Enemy** under Mortal Enemy.
+  The action uses the player whose menu you opened, even if you change targets.
+  NPCs, yourself, off-realm players, restricted identities, and combat menus are
+  left unchanged. Menu-only names require a complete name and same-server check.
+- **Add by name:** click **Add player** in the list, enter first and last name,
+  optionally add a note, then choose **Add Rival** or **Add Mortal Enemy**. This
+  records a name on your current realm; it does not verify that the character exists.
+- **Current target:** the named target strip provides both relationship buttons
+  without opening another window. It updates when you change targets.
+
+No keybindings are added. The main list has a separate Settings button; alert
+previews and display controls live on the actual WoW addon settings page.
 
 ## Commands
 
@@ -40,6 +58,7 @@ the panel and enable the button again.
 | Command | Action |
 | --- | --- |
 | `/mortal` or `/mortal list` | Open/close the book |
+| `/mortal settings` | Open WoW's Mortal Enemy AddOns settings page |
 | `/mortal rival [note]` | Mark the targeted player as a rival |
 | `/mortal enemy [note]` | Mark the targeted player as a mortal enemy |
 | `/mortal note <text>` | Update the saved target's note; omit text to clear |
@@ -64,7 +83,7 @@ their note unless you provide a replacement.
 
 ## Open-world display options
 
-Open `/mortal` and use the **Open World Display** section. Each row controls
+Open **Settings → AddOns → Mortal Enemy**, or use `/mortal settings`. Each row controls
 one status independently, using amber for rivals and red for mortal enemies:
 
 - **Badge:** a compact sword/skull icon just left of the visible health bar.
@@ -78,7 +97,7 @@ preference stays disabled when upgrading. Settings are saved per character.
 Changes apply to currently recognized nameplates and an open player tooltip;
 removing a saved player also clears their tooltip annotation. Switching the
 underlying tooltip to an unrelated player, item, or NPC clears the extra lines.
-Encounter alerts and sounds remain separately configurable below the matrix.
+Encounter alerts, sound, the minimap button, and the alert preview are on the same settings page.
 
 Nameplates must be enabled in WoW. A tooltip can still work without nameplates
 when the hovered player's identity is accessible. Third-party nameplate layouts
@@ -130,6 +149,10 @@ them untargeted but their nameplate visible, and during combat. The output repor
 ### In-game acceptance checklist
 
 - [ ] Loads without Lua errors; `/mortal` opens and closes the book.
+- [ ] Settings button opens the actual WoW AddOns preferences page.
+- [ ] Player right-click actions mark the clicked character after retargeting.
+- [ ] Add-by-name form validates first/last name and saves optional notes.
+- [ ] Target strip shows the selected full name and disables invalid targets.
 - [ ] A same-faction player's rival badge appears without targeting them.
 - [ ] An opposing-faction player's enemy badge appears without targeting them.
 - [ ] Repeat outside combat and during open-world PvP; capture diagnostics if restricted.

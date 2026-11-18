@@ -15,6 +15,7 @@ local function Command(message)
     local command, rest = ME.Trim(message):match("^(%S*)%s*(.-)$")
     command = command:lower()
     if command == "" or command == "list" then ME.ToggleWindow()
+    elseif command == "settings" then ME.OpenSettings()
     elseif command == "rival" or command == "enemy" then ME.MarkTarget(command, rest ~= "" and rest or nil)
     elseif command == "help" then Help()
     elseif command == "preview" then ME.Preview()
@@ -60,7 +61,8 @@ local function Command(message)
         if not ME.styles[status] or not ME.Key(name) or not name:find("%s") then
             ME.Print("Usage: /mortal add rival|enemy First Last [note]"); return
         end
-        ME.Save({ key = ME.Key(name), name = name }, status, note)
+        local key, reason = ME.AddNamedPlayer(name, status, note)
+        if not key then ME.Print(reason) end
     else Help() end
 end
 frame:RegisterEvent("ADDON_LOADED")
@@ -71,6 +73,8 @@ frame:SetScript("OnEvent", function(self, event, unit)
         ready = true
         ME.InitTooltips()
         ME.InitMinimap()
+        ME.InitSettings()
+        ME.InitPlayerMenus()
         self:UnregisterEvent("ADDON_LOADED")
         SLASH_MORTALENEMY1 = "/mortal"
         SLASH_MORTALENEMY2 = "/mortalenemy"
@@ -94,9 +98,12 @@ frame:SetScript("OnEvent", function(self, event, unit)
         for token in pairs(ME.units) do ME.RemovePlate(token) end
         ME.InitTooltips()
         ME.InitMinimap()
+        ME.InitSettings()
+        ME.InitPlayerMenus()
         ME.SeedNameplates()
         ME.RefreshWorld()
     else ME.RefreshWorld() end
+    if ready then ME.RefreshTargetStrip() end
 end)
 frame:SetScript("OnUpdate", function(_, elapsed)
     if not ready then return end
@@ -104,4 +111,46 @@ frame:SetScript("OnUpdate", function(_, elapsed)
     if elapsedSinceScan < 0.5 then return end
     elapsedSinceScan = 0
     if next(ME.db.entries) then ME.RefreshWorld() end
+    ME.RefreshTargetStrip()
 end)
+
+local playerMenusInstalled = false
+function ME.InitPlayerMenus()
+    if playerMenusInstalled or not Menu or not Menu.ModifyMenu then return end
+    playerMenusInstalled = true
+    local tags = { "MENU_UNIT_PLAYER", "MENU_UNIT_ENEMY_PLAYER", "MENU_UNIT_PARTY", "MENU_UNIT_RAID_PLAYER", "MENU_UNIT_TARGET", "MENU_UNIT_FOCUS", "MENU_UNIT_FRIEND" }
+    for _, tag in ipairs(tags) do
+        Menu.ModifyMenu(tag, function(_, root, context)
+            if not context or ME.IsSecret(context) or ME.Read(InCombatLockdown) == true then return end
+            for _, key in ipairs({ "unit", "name", "surname", "guid", "isSelf" }) do
+                if ME.IsSecret(context[key]) then return end
+            end
+            if context.isSelf then return end
+            local identity
+            if type(context.unit) == "string" then
+                -- Resolve now; the unit token can point at somebody else by click time.
+                identity = ME.Identity(context.unit)
+                if ME.Read(UnitIsUnit, context.unit, "player") == true then return end
+                local ok, guid = pcall(UnitGUID, context.unit)
+                if not ok or ME.IsSecret(guid) then return end
+            else
+                local name = context.name
+                if type(name) == "string" and not name:find("%s") and type(context.surname) == "string" and context.surname ~= "" then
+                    name = name .. " " .. context.surname
+                end
+                if type(name) ~= "string" or not name:match("^%S+ %S+$") or not ME.Key(name)
+                    or ME.Read(UnitIsSameServer, name) ~= true then return end
+                identity = { key = ME.Key(name), name = name }
+                local guid = context.guid
+                if type(guid) == "string" and guid:match("^Player%-") then identity.guid = guid end
+            end
+            if not identity then return end
+            local ownName = ME.Read(GetUnitName, "player", true)
+            if ownName and ME.Key(ownName) == identity.key then return end
+            root:CreateDivider()
+            root:CreateTitle("Mortal Enemy")
+            root:CreateButton("Mark as Rival", function() ME.Save(identity, "rival") end)
+            root:CreateButton("Mark as Mortal Enemy", function() ME.Save(identity, "enemy") end)
+        end)
+    end
+end

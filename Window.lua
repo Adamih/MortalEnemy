@@ -1,6 +1,6 @@
 local _, ME = ...
 local window, selectedKey
-local page, pageSize = 1, 6
+local page, pageSize = 1, 5
 local function Button(parent, text, width, x, y, callback)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
@@ -37,14 +37,21 @@ function ME.RefreshWindow()
         window.editingKey = selectedKey
     end
     for _, button in ipairs(window.editButtons) do button:SetEnabled(entry ~= nil) end
-    for key, check in pairs(window.checks) do check:SetChecked(ME.db.settings[key]) end
-    for status, checks in pairs(window.displayChecks) do
-        for key, check in pairs(checks) do check:SetChecked(ME.db.settings.display[status][key]) end
-    end
+    ME.RefreshTargetStrip()
+end
+function ME.RefreshTargetStrip()
+    if not window or not window:IsShown() then return end
+    local identity = ME.Identity("target")
+    local isSelf = ME.Read(UnitIsUnit, "target", "player") == true
+    local valid = identity and not isSelf
+    local entry = valid and ME.Find(identity)
+    window.targetName:SetText(valid and ("Target: " .. identity.name .. (entry and (" — " .. ME.styles[entry.status].label) or ""))
+        or "Target another player on your realm to mark them.")
+    for _, button in ipairs(window.targetButtons) do button:SetEnabled(valid and true or false) end
 end
 local function CreateWindow()
     window = CreateFrame("Frame", "MortalEnemyWindow", UIParent, "BackdropTemplate")
-    window:SetSize(530, 716)
+    window:SetSize(530, 570)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -67,16 +74,26 @@ local function CreateWindow()
     local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
     close:SetPoint("TOPRIGHT", -4, -4)
     table.insert(UISpecialFrames, "MortalEnemyWindow")
-    Button(window, "Target: Rival", 140, 20, -68, function() selectedKey = ME.MarkTarget("rival") or selectedKey; ME.RefreshWindow() end)
-    Button(window, "Target: Mortal Enemy", 184, 168, -68, function() selectedKey = ME.MarkTarget("enemy") or selectedKey; ME.RefreshWindow() end)
-    Button(window, "Preview alert", 148, 360, -68, ME.Preview)
-    window.counter = Label("", "GameFontHighlightSmall", 20, -106)
-    window.empty = Label("Your book is empty. Target a player and mark them above.", "GameFontHighlight", 26, -167)
+    Button(window, "Add player", 140, 20, -68, function() ME.ShowAddPlayer() end)
+    Button(window, "Settings", 110, 398, -68, function() ME.OpenSettings() end)
+    local strip = window:CreateTexture(nil, "BACKGROUND")
+    strip:SetColorTexture(0.26, 0.16, 0.1, 0.45)
+    strip:SetPoint("TOPLEFT", 20, -104)
+    strip:SetSize(488, 72)
+    window.targetName = Label("", "GameFontHighlightSmall", 30, -115)
+    window.targetName:SetWidth(468)
+    window.targetName:SetJustifyH("LEFT")
+    window.targetButtons = {
+        Button(window, "Mark as Rival", 170, 30, -142, function() selectedKey = ME.MarkTarget("rival") or selectedKey; ME.RefreshWindow() end),
+        Button(window, "Mark as Mortal Enemy", 220, 208, -142, function() selectedKey = ME.MarkTarget("enemy") or selectedKey; ME.RefreshWindow() end),
+    }
+    window.counter = Label("", "GameFontHighlightSmall", 20, -191)
+    window.empty = Label("No nemeses yet. Add a player by name or mark your target.", "GameFontHighlightSmall", 26, -234)
     window.rows = {}
     for i = 1, pageSize do
         local row = CreateFrame("Button", nil, window)
         row:SetSize(486, 39)
-        row:SetPoint("TOPLEFT", 22, -128 - (i - 1) * 42)
+        row:SetPoint("TOPLEFT", 22, -214 - (i - 1) * 42)
         row.selected = row:CreateTexture(nil, "BACKGROUND")
         row.selected:SetAllPoints()
         row.selected:SetColorTexture(0.4, 0.22, 0.12, 0.5)
@@ -95,72 +112,167 @@ local function CreateWindow()
         row:SetScript("OnClick", function(self) selectedKey = self.key; ME.RefreshWindow() end)
         window.rows[i] = row
     end
-    Button(window, "Previous", 100, 20, -385, function() page = page - 1; ME.RefreshWindow() end)
-    Button(window, "Next", 100, 128, -385, function() page = page + 1; ME.RefreshWindow() end)
-    window.selection = Label("", "GameFontHighlightSmall", 20, -423)
+    Button(window, "Previous", 100, 20, -432, function() page = page - 1; ME.RefreshWindow() end)
+    Button(window, "Next", 100, 128, -432, function() page = page + 1; ME.RefreshWindow() end)
+    window.selection = Label("", "GameFontHighlightSmall", 20, -469)
     window.note = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
     window.note:SetSize(478, 26)
-    window.note:SetPoint("TOPLEFT", 26, -444)
+    window.note:SetPoint("TOPLEFT", 26, -490)
     window.note:SetAutoFocus(false)
     window.note:SetMaxLetters(240)
     window.note:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local function SaveNote()
         local entry = selectedKey and ME.db.entries[selectedKey]
-        if entry then entry.note = ME.Note(window.note:GetText()); ME.Print("Note saved."); window.note:ClearFocus() end
+        if entry then entry.note = ME.Note(window.note:GetText()); ME.Print("Note saved."); window.note:ClearFocus(); ME.Changed() end
     end
     window.note:SetScript("OnEnterPressed", SaveNote)
     window.editButtons = {
-        Button(window, "Save note", 106, 20, -481, SaveNote),
-        Button(window, "Rival", 100, 134, -481, function()
+        Button(window, "Save note", 106, 20, -526, SaveNote),
+        Button(window, "Rival", 100, 134, -526, function()
             if selectedKey and ME.db.entries[selectedKey] then ME.db.entries[selectedKey].status = "rival"; ME.Changed() end
         end),
-        Button(window, "Mortal Enemy", 140, 242, -481, function()
+        Button(window, "Mortal Enemy", 140, 242, -526, function()
             if selectedKey and ME.db.entries[selectedKey] then ME.db.entries[selectedKey].status = "enemy"; ME.Changed() end
         end),
-        Button(window, "Remove", 118, 390, -481, function() if selectedKey then ME.Remove(selectedKey); selectedKey = nil; ME.RefreshWindow() end end),
+        Button(window, "Remove", 118, 390, -526, function() if selectedKey then ME.Remove(selectedKey); selectedKey = nil; ME.RefreshWindow() end end),
     }
-    Label("OPEN WORLD DISPLAY", "GameFontNormal", 20, -523)
-    local columns = {
-        { "badge", "Badge", 180 }, { "tooltip", "Tooltip", 300 },
-        { "tooltipNote", "Note", 420 },
-    }
-    for _, column in ipairs(columns) do Label(column[2], "GameFontHighlightSmall", column[3], -549) end
-    window.displayChecks = {}
-    for i, status in ipairs({ "rival", "enemy" }) do
-        local y = -568 - (i - 1) * 32
-        local style = ME.styles[status]
-        local label = Label(style.label, "GameFontNormal", 20, y - 9)
-        label:SetTextColor(style.r, style.g, style.b)
-        window.displayChecks[status] = {}
-        for _, column in ipairs(columns) do
-            local key = column[1]
-            local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
-            check:SetPoint("TOPLEFT", column[3], y)
-            check:SetScript("OnClick", function(self)
-                ME.db.settings.display[status][key] = self:GetChecked() and true or false
-                ME.Changed()
-            end)
-            window.displayChecks[status][key] = check
-        end
-    end
-    window.checks = {}
-    for i, item in ipairs({ { "alerts", "Encounter alerts", 20 }, { "sound", "Sound", 200 }, { "showMinimap", "Show minimap button", 300 } }) do
-        local key = item[1]
-        local check = CreateFrame("CheckButton", nil, window, "UICheckButtonTemplate")
-        check:SetPoint("TOPLEFT", item[3], -646)
-        local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        label:SetPoint("LEFT", check, "RIGHT", 0, 0)
-        label:SetText(item[2])
-        check:SetScript("OnClick", function(self) ME.db.settings[key] = self:GetChecked() and true or false; ME.Changed() end)
-        window.checks[key] = check
-    end
-    Label("/mortal help  •  /mortal diagnose  •  Drag window to move", "GameFontDisableSmall", 20, -690)
     window:SetScript("OnShow", ME.RefreshWindow)
     window:Hide()
 end
 function ME.ToggleWindow()
     if not window then CreateWindow() end
     window:SetShown(not window:IsShown())
+end
+
+local addDialog
+function ME.ShowAddPlayer()
+    if not addDialog then
+        addDialog = CreateFrame("Frame", "MortalEnemyAddDialog", UIParent, "BackdropTemplate")
+        addDialog:SetSize(400, 286)
+        addDialog:SetPoint("CENTER")
+        addDialog:SetFrameStrata("FULLSCREEN_DIALOG")
+        addDialog:SetClampedToScreen(true)
+        addDialog:EnableMouse(true)
+        addDialog:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
+        addDialog:SetBackdropColor(0.07, 0.05, 0.04, 1)
+        addDialog:SetBackdropBorderColor(0.48, 0.26, 0.2, 1)
+        local function Label(text, x, y)
+            local label = addDialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            label:SetPoint("TOPLEFT", x, y)
+            label:SetText(text)
+            return label
+        end
+        Label("Add a player on your realm", 20, -20)
+        local close = CreateFrame("Button", nil, addDialog, "UIPanelCloseButton")
+        close:SetPoint("TOPRIGHT", -4, -4)
+        table.insert(UISpecialFrames, "MortalEnemyAddDialog")
+        local function Edit(label, width, x, y, maxLetters)
+            Label(label, x, y)
+            local edit = CreateFrame("EditBox", nil, addDialog, "InputBoxTemplate")
+            edit:SetSize(width, 26)
+            edit:SetPoint("TOPLEFT", x + 4, y - 20)
+            edit:SetAutoFocus(false)
+            edit:SetMaxLetters(maxLetters)
+            edit:SetScript("OnEscapePressed", function() addDialog:Hide() end)
+            return edit
+        end
+        addDialog.first = Edit("First name", 164, 20, -58, 48)
+        addDialog.last = Edit("Last name", 164, 208, -58, 48)
+        addDialog.note = Edit("Note (optional)", 352, 20, -128, 240)
+        addDialog.first:SetScript("OnTabPressed", function() addDialog.last:SetFocus() end)
+        addDialog.last:SetScript("OnTabPressed", function() addDialog.note:SetFocus() end)
+        addDialog.error = Label("", 20, -194)
+        addDialog.error:SetTextColor(1, 0.3, 0.3)
+        addDialog.error:SetWidth(360)
+        addDialog.error:SetJustifyH("LEFT")
+        local function Add(status)
+            local key, reason = ME.AddNamedPlayer(addDialog.first:GetText() .. " " .. addDialog.last:GetText(), status, addDialog.note:GetText())
+            if not key then addDialog.error:SetText(reason); return end
+            selectedKey = key
+            for i, item in ipairs(ME.Entries()) do if item.key == key then page = math.ceil(i / pageSize); break end end
+            addDialog:Hide()
+            if not window then CreateWindow() end
+            window:Show()
+            ME.RefreshWindow()
+        end
+        Button(addDialog, "Add Rival", 164, 20, -234, function() Add("rival") end)
+        Button(addDialog, "Add Mortal Enemy", 184, 196, -234, function() Add("enemy") end)
+    end
+    addDialog.first:SetText("")
+    addDialog.last:SetText("")
+    addDialog.note:SetText("")
+    addDialog.error:SetText("")
+    addDialog:Show()
+    addDialog.first:SetFocus()
+end
+
+local settingsPanel, settingsCategory
+function ME.RefreshSettings()
+    if not settingsPanel or not settingsPanel:IsShown() then return end
+    for key, check in pairs(settingsPanel.checks) do check:SetChecked(ME.db.settings[key]) end
+    for status, checks in pairs(settingsPanel.displayChecks) do
+        for key, check in pairs(checks) do check:SetChecked(ME.db.settings.display[status][key]) end
+    end
+end
+function ME.InitSettings()
+    if settingsCategory or not Settings or not Settings.RegisterCanvasLayoutCategory then return end
+    settingsPanel = CreateFrame("Frame", "MortalEnemySettingsPanel")
+    local function Label(text, font, x, y)
+        local label = settingsPanel:CreateFontString(nil, "OVERLAY", font)
+        label:SetPoint("TOPLEFT", x, y)
+        label:SetText(text)
+        return label
+    end
+    Label("Mortal Enemy", "GameFontNormalLarge", 20, -20)
+    Label("Display and encounter preferences for this character.", "GameFontHighlight", 20, -50)
+    Label("Open-world display", "GameFontNormal", 20, -94)
+    local columns = { { "badge", "Icon badge", 180 }, { "tooltip", "Tooltip", 300 }, { "tooltipNote", "Note", 420 } }
+    for _, column in ipairs(columns) do Label(column[2], "GameFontHighlightSmall", column[3], -120) end
+    settingsPanel.displayChecks = {}
+    for i, status in ipairs({ "rival", "enemy" }) do
+        local y = -140 - (i - 1) * 36
+        local style = ME.styles[status]
+        local label = Label(style.label, "GameFontNormal", 20, y - 9)
+        label:SetTextColor(style.r, style.g, style.b)
+        settingsPanel.displayChecks[status] = {}
+        for _, column in ipairs(columns) do
+            local key = column[1]
+            local check = CreateFrame("CheckButton", nil, settingsPanel, "UICheckButtonTemplate")
+            check:SetPoint("TOPLEFT", column[3], y)
+            check:SetScript("OnClick", function(self)
+                ME.db.settings.display[status][key] = self:GetChecked() and true or false
+                ME.Changed()
+            end)
+            settingsPanel.displayChecks[status][key] = check
+        end
+    end
+    settingsPanel.checks = {}
+    for i, item in ipairs({ { "alerts", "Encounter alerts" }, { "sound", "Alert sound" }, { "showMinimap", "Show minimap button" } }) do
+        local key = item[1]
+        local check = CreateFrame("CheckButton", nil, settingsPanel, "UICheckButtonTemplate")
+        check:SetPoint("TOPLEFT", 20, -234 - (i - 1) * 34)
+        local label = check:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+        label:SetPoint("LEFT", check, "RIGHT", 0, 0)
+        label:SetText(item[2])
+        check:SetScript("OnClick", function(self) ME.db.settings[key] = self:GetChecked() and true or false; ME.Changed() end)
+        settingsPanel.checks[key] = check
+    end
+    Button(settingsPanel, "Preview alert", 150, 20, -356, ME.Preview)
+    Button(settingsPanel, "Open nemesis list", 170, 180, -356, function()
+        if SettingsPanel and SettingsPanel:IsShown() then HideUIPanel(SettingsPanel) end
+        if not window then CreateWindow() end
+        window:Show()
+    end)
+    settingsPanel:SetScript("OnShow", ME.RefreshSettings)
+    settingsPanel:Hide()
+    settingsCategory = Settings.RegisterCanvasLayoutCategory(settingsPanel, "Mortal Enemy")
+    Settings.RegisterAddOnCategory(settingsCategory)
+end
+function ME.OpenSettings()
+    ME.InitSettings()
+    if not settingsCategory then ME.Print("The game's AddOns settings are not available yet."); return end
+    if window then window:Hide() end
+    Settings.OpenToCategory(settingsCategory:GetID())
 end
 
 local minimapButton
