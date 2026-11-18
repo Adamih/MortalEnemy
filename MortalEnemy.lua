@@ -5,8 +5,8 @@ local function Help()
     ME.Print("/mortal — open your book of rivals.")
     ME.Print("/mortal rival [note] or enemy [note] — mark your target.")
     ME.Print("/mortal note <text> — update your target's note; omit text to clear.")
-    ME.Print("/mortal remove [Name-Realm] — remove a named player or your target.")
-    ME.Print("/mortal add rival|enemy Name-Realm [note] — add manually.")
+    ME.Print("/mortal remove [Name] — remove a named player or your target.")
+    ME.Print("/mortal add rival|enemy Name [note] — add manually.")
     ME.Print("/mortal badges|alerts|sound — toggle a setting.")
     ME.Print("/mortal preview — sample alert; /mortal diagnose — identity availability.")
 end
@@ -32,22 +32,19 @@ local function Command(message)
     elseif command == "remove" then
         local key
         if rest ~= "" then
-            local name, realm = rest:match("^([^%-]+)%-(.+)$")
-            key = ME.Key(name, realm)
+            key = ME.Key(rest)
         else
             local entry
             entry, key = ME.Find(ME.Identity("target"))
         end
         if key and ME.db.entries[key] then ME.Remove(key)
-        else ME.Print("No match. Target a saved player or use /mortal remove Name-Realm.") end
+        else ME.Print("No match. Target a saved player or use /mortal remove Name.") end
     elseif command == "add" then
-        local status, fullName, note = rest:match("^(%S+)%s+(%S+)%s*(.-)$")
-        local name, realm
-        if fullName then name, realm = fullName:match("^([^%-]+)%-(.+)$") end
-        if not ME.styles[status] or not ME.Key(name, realm) then
-            ME.Print("Usage: /mortal add rival|enemy Name-Realm [note]"); return
+        local status, name, note = rest:match("^(%S+)%s+(%S+)%s*(.-)$")
+        if not ME.styles[status] or not ME.Key(name) then
+            ME.Print("Usage: /mortal add rival|enemy Name [note]"); return
         end
-        ME.Save({ key = ME.Key(name, realm), name = name, realm = realm }, status, note)
+        ME.Save({ key = ME.Key(name), name = name }, status, note)
     else Help() end
 end
 frame:RegisterEvent("ADDON_LOADED")

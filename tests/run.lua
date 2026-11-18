@@ -71,9 +71,14 @@ local function check(value, message) assert(value, message) end
 local function player(name, realm, guid) return { player = true, name = name, realm = realm, guid = guid } end
 
 event("ADDON_LOADED", "OtherAddon")
-check(not MortalEnemyDB, "ignore other addons")
+check(not MortalEnemyCharDB, "ignore other addons")
+MortalEnemyDB = { entries = { old = { name = "Old", realm = "HomeRealm", status = "enemy" } } }
 event("ADDON_LOADED", "MortalEnemy")
-check(MortalEnemyDB.version == 1 and SlashCmdList.MORTALENEMY, "initialization")
+check(MortalEnemyDB == nil and next(ME.db.entries) == nil, "legacy shared data is discarded")
+check(MortalEnemyCharDB.version == 2 and SlashCmdList.MORTALENEMY, "initialization")
+local toc = assert(io.open("MortalEnemy.toc")):read("*a")
+check(toc:find("## SavedVariablesPerCharacter: MortalEnemyCharDB", 1, true), "character-specific TOC persistence")
+check(not toc:find("## SavedVariables:", 1, true), "no shared saved variables")
 command("list")
 check(MortalEnemyWindow:IsShown(), "empty book opens")
 command("list")
@@ -88,17 +93,23 @@ command("enemy")
 check(next(ME.db.entries) == nil, "NPC must not add")
 units.target = player("Alice", "", "Player-1")
 command("rival Helped me once")
-local alice = ME.db.entries["alice-homerealm"]
-check(alice and alice.status == "rival" and alice.note == "Helped me once", "save target and realm fallback")
+local alice = ME.db.entries["alice"]
+check(alice and alice.status == "rival" and alice.note == "Helped me once", "save target on current realm")
 command("enemy")
 check(alice.status == "enemy" and alice.note == "Helped me once", "change status preserves note")
 command("note Killed me while fishing")
 check(alice.note == "Killed me while fishing", "edit note")
 command("note")
 check(alice.note == "", "clear note")
-check(ME.Find({key = "alice-otherrealm", guid = "Player-other"}) == nil, "different realm must not match")
-check(ME.Find({key = "alice-homerealm", guid = "Player-other"}) == nil, "GUID conflict must not match")
-check(ME.Find({key = "renamed-homerealm", guid = "Player-1"}) == alice, "GUID matches renamed player")
+local originalTarget = units.target
+units.target = player("Alice", "OtherRealm", "Player-1")
+command("rival")
+check(ME.Identity("target") == nil and alice.status == "enemy", "off-realm target rejected even with matching GUID")
+units.target = player("Alice", secret, "Player-1")
+check(ME.Identity("target") == nil, "restricted realm cannot establish eligibility")
+units.target = originalTarget
+check(ME.Find({key = "alice", guid = "Player-other"}) == nil, "GUID conflict must not match")
+check(ME.Find({key = "renamed", guid = "Player-1"}) == alice, "GUID matches renamed player")
 units.nameplate1 = units.target
 plates.nameplate1 = object("plate")
 plates.nameplate1.unitToken = "nameplate1"
@@ -128,7 +139,7 @@ check(sounds == soundCount + 1, "return after cooldown alerts")
 units.nameplate1 = player("Bob", "OtherRealm", "Player-2")
 ME.UpdatePlate("nameplate1")
 check(not badge:IsShown(), "nameplate recycling")
-units.nameplate1 = player(secret, "OtherRealm", secret)
+units.nameplate1 = player(secret, "HomeRealm", secret)
 ME.UpdatePlate("nameplate1")
 check(not badge:IsShown(), "restricted name skips matching")
 units.nameplate1.guid = "Player-1"
@@ -151,38 +162,50 @@ check(ME.Identity("target") == nil, "failed identity query with restricted GUID 
 UnitName = oldUnitName
 
 command("add enemy Bob-OtherRealm A grudge")
-check(ME.db.entries["bob-otherrealm"].note == "A grudge", "manual add")
+command("add enemy Bob-HomeRealm A grudge")
+check(not ME.db.entries.bob, "realm suffixes are rejected, including own realm")
+command("add enemy Bob A grudge")
+check(ME.db.entries.bob.note == "A grudge" and ME.db.entries.bob.realm == nil, "plain-name manual add")
 command("add")
 command("add dragon Bob-OtherRealm")
-command("remove Alice")
-check(ME.db.entries["alice-homerealm"] ~= nil, "ambiguous remove must not delete")
+command("remove Alice-HomeRealm")
+check(ME.db.entries["alice"] ~= nil, "realm suffix is not accepted when removing")
 command("list")
 check(MortalEnemyWindow:IsShown(), "window opens")
 local row
-for _, f in ipairs(frames) do if f.key == "bob-otherrealm" then row = f end end
+for _, f in ipairs(frames) do if f.key == "bob" then row = f end end
 check(row, "list row rendered")
 row.scripts.OnClick(row)
 local edit
 for _, f in ipairs(frames) do if f.kind == "EditBox" then edit = f end end
 edit:SetText("New note")
 edit.scripts.OnEnterPressed(edit)
-check(ME.db.entries["bob-otherrealm"].note == "New note", "window saves note")
+check(ME.db.entries["bob"].note == "New note", "window saves note")
 command("sound")
 check(not ME.db.settings.sound, "sound toggle")
 command("badges")
 check(not badge:IsShown(), "disable badges hides existing")
 command("preview")
-command("remove Bob-OtherRealm")
-check(not ME.db.entries["bob-otherrealm"], "remove named player")
+command("remove Bob")
+check(not ME.db.entries["bob"], "remove named player")
 check(#ME.Note(string.rep("a", 241)) == 240, "ASCII note limit")
 check(ME.Note(string.rep("a", 239) .. "é") == string.rep("a", 239), "UTF-8 note truncation")
 check(#ME.Note(string.rep("é", 121)) == 240, "UTF-8 boundary at limit")
-local saved = MortalEnemyDB
+local saved = MortalEnemyCharDB
 ME.InitDB()
-check(MortalEnemyDB == saved and ME.db.entries["alice-homerealm"], "initialization preserves saved records")
-command("remove Alice-HomeRealm")
+check(MortalEnemyCharDB == saved and ME.db.entries["alice"], "initialization preserves saved records")
+-- Simulate WoW supplying a separate SavedVariables table for another character.
+MortalEnemyCharDB = nil
+ME.InitDB()
+check(next(ME.db.entries) == nil and ME.db.settings.sound, "new character gets independent empty list and default settings")
+command("add rival Charlie Another story")
+check(not saved.entries.charlie and saved.entries.alice, "second character cannot change first character's list")
+MortalEnemyCharDB = saved
+ME.InitDB()
+check(ME.db.entries.alice and not ME.db.entries.charlie and not ME.db.settings.sound, "returning character restores their own list and settings")
+command("remove Alice")
 check(next(ME.db.entries) == nil, "remove final entry")
 ME.db.entries.bad = {status = "invalid"}
 ME.InitDB()
 check(next(ME.db.entries) == nil, "malformed records ignored")
-io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, commands, UI, persistence\n")
+io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, commands, UI, per-character persistence, current-realm enforcement\n")

@@ -25,14 +25,20 @@ function ME.Note(value)
     end
     return text:sub(1, boundary - 1)
 end
-function ME.Key(name, realm)
-    if type(name) ~= "string" or name == "" or type(realm) ~= "string" or realm == "" then return nil end
-    return string.lower(name .. "-" .. realm:gsub("%s", ""))
+function ME.Key(name)
+    if type(name) ~= "string" or name == "" or name:find("[%s%-]") then return nil end
+    return string.lower(name)
+end
+local function NormalizeRealm(realm)
+    if type(realm) ~= "string" then return nil end
+    return string.lower(realm:gsub("%s", ""))
 end
 function ME.InitDB()
-    if type(MortalEnemyDB) ~= "table" then MortalEnemyDB = {} end
-    ME.db = MortalEnemyDB
-    ME.db.version = 1
+    -- Development reset: discard the former account-wide data entirely.
+    MortalEnemyDB = nil
+    if type(MortalEnemyCharDB) ~= "table" then MortalEnemyCharDB = {} end
+    ME.db = MortalEnemyCharDB
+    ME.db.version = 2
     if type(ME.db.entries) ~= "table" then ME.db.entries = {} end
     if type(ME.db.settings) ~= "table" then ME.db.settings = {} end
     for _, key in ipairs({ "badges", "alerts", "sound" }) do
@@ -40,9 +46,10 @@ function ME.InitDB()
     end
     for key, entry in pairs(ME.db.entries) do
         if type(entry) ~= "table" or not ME.styles[entry.status]
-            or type(entry.name) ~= "string" or type(entry.realm) ~= "string" then
+            or ME.Key(entry.name) ~= key then
             ME.db.entries[key] = nil
         else
+            entry.realm = nil
             if type(entry.note) ~= "string" then entry.note = "" end
             if type(entry.guid) ~= "string" then entry.guid = nil end
             if type(entry.lastSeen) ~= "number" then entry.lastSeen = nil end
@@ -52,16 +59,18 @@ function ME.InitDB()
 end
 function ME.Identity(unit)
     if ME.Read(UnitIsPlayer, unit) ~= true then return nil end
+    local ok, name, realm = pcall(UnitName, unit)
+    if not ok or ME.IsSecret(realm) then return nil end
+    local currentRealm = NormalizeRealm(ME.Read(GetNormalizedRealmName))
+    if not currentRealm or currentRealm == "" then return nil end
+    -- An empty realm from UnitName denotes the player's own realm.
+    if realm ~= nil and realm ~= "" and NormalizeRealm(realm) ~= currentRealm then return nil end
     local guid = ME.Read(UnitGUID, unit)
     if type(guid) ~= "string" then guid = nil end
-    local function GuidOnly() return guid and { guid = guid } or nil end
-    local ok, name, realm = pcall(UnitName, unit)
-    if not ok or ME.IsSecret(name) or ME.IsSecret(realm) then return GuidOnly() end
-    if type(name) ~= "string" or name == "" then return GuidOnly() end
-    if not realm or realm == "" then realm = ME.Read(GetNormalizedRealmName) end
-    local key = ME.Key(name, realm)
-    if not key then return GuidOnly() end
-    return { key = key, name = name, realm = realm, guid = guid }
+    if ME.IsSecret(name) then return guid and { guid = guid } or nil end
+    local key = ME.Key(name)
+    if not key then return nil end
+    return { key = key, name = name, guid = guid }
 end
 function ME.Find(identity)
     if not identity then return nil end
@@ -84,7 +93,7 @@ function ME.Save(identity, status, note)
     local entry, oldKey = ME.Find(identity)
     entry = entry or { added = time() }
     if oldKey and oldKey ~= identity.key then ME.db.entries[oldKey] = nil end
-    entry.name, entry.realm, entry.status = identity.name, identity.realm, status
+    entry.name, entry.status = identity.name, status
     entry.guid = identity.guid or entry.guid
     if note ~= nil then entry.note = ME.Note(note) end
     ME.db.entries[identity.key] = entry
@@ -96,7 +105,7 @@ function ME.MarkTarget(status, note)
     if ME.Read(UnitIsUnit, "target", "player") == true then ME.Print("Choose another player first."); return end
     local identity = ME.Identity("target")
     if not identity or not identity.key then
-        ME.Print("Target a player with a readable identity. Try outside combat, or use /mortal add.")
+        ME.Print("Target a player on your realm with a readable identity. Try outside combat, or use /mortal add.")
         return
     end
     return ME.Save(identity, status, note)
@@ -132,7 +141,7 @@ function ME.Diagnose()
         end
         local identity = ME.Identity(unit)
         ME.Print(unit .. ": name=" .. state(UnitName) .. ", GUID=" .. state(UnitGUID)
-            .. (identity and identity.key and (", player=" .. identity.name .. "-" .. identity.realm)
+            .. (identity and identity.key and (", player=" .. identity.name)
                 or (identity and ", GUID-only identity" or ", no usable player identity")))
     end
     if #units > 14 then ME.Print("Additional nameplates omitted.") end

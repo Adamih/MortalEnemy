@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.1.0 targets interface 16001.
+The other player does not need the addon. Version 0.2.0 targets interface 16001.
 
 ## First run
 
@@ -36,9 +36,9 @@ Type `/mortal preview` to preview the encounter alert without adding anyone.
 | `/mortal enemy [note]` | Mark the targeted player as a mortal enemy |
 | `/mortal note <text>` | Update the saved target's note; omit text to clear |
 | `/mortal remove` | Remove the targeted saved player |
-| `/mortal remove Name-Realm` | Remove an entry by full name |
-| `/mortal add enemy Name-Realm [note]` | Manually add an enemy |
-| `/mortal add rival Name-Realm [note]` | Manually add a rival |
+| `/mortal remove Name` | Remove an entry by name |
+| `/mortal add enemy Name [note]` | Manually add an enemy |
+| `/mortal add rival Name [note]` | Manually add a rival |
 | `/mortal badges` | Toggle nameplate and target badges |
 | `/mortal alerts` | Toggle encounter banners and chat alerts |
 | `/mortal sound` | Toggle alert sounds |
@@ -46,21 +46,24 @@ Type `/mortal preview` to preview the encounter alert without adding anyone.
 | `/mortal diagnose` | Print client version and identity availability |
 | `/mortal help` | Show command help |
 
-Manual names must include the realm, with spaces removed from multiword realms.
+Only players on your current realm can be added or recognized. Commands take a
+plain player name; realm suffixes are not accepted.
 Notes are limited to 240 bytes when saved. Marking the same player again keeps
 their note unless you provide a replacement.
 
 ## Recognition and data
 
-The list and settings are account-wide within this WoW installation. SavedVariables
-(`MortalEnemyDB`) are written by WoW on normal logout or `/reload`. No server,
-external requests, or messages to other players are used.
+Each character has an independent list and settings, saved with WoW's
+`SavedVariablesPerCharacter` as `MortalEnemyCharDB`. WoW writes these on normal
+logout or `/reload`. The old development version's shared list is discarded;
+there is no migration. No server, external requests, or messages to other players
+are used.
 
 Recognition checks available player identities from visible nameplates, your
-target, and mouseover. Badges require an accessible nameplate. Name + realm
-matching works when readable; a known player GUID can also match a renamed
-character. A readable conflicting GUID prevents a name match. The addon never
-matches by a bare name across realms.
+target, and mouseover. Only your current realm is accepted. Badges require an
+accessible nameplate. Names identify entries within that realm; a known player
+GUID can also match a renamed character. A readable conflicting GUID prevents a
+name match. If realm information is restricted, recognition is skipped.
 
 An encounter produces a five-second banner, a chat line, and an optional raid
 warning sound. Continuous visibility does not repeatedly announce the same player.
@@ -109,7 +112,7 @@ luac -p Core.lua Display.lua Window.lua MortalEnemy.lua tests/run.lua
 ```
 
 The standalone simulated client covers initialization, player/NPC/self filtering,
-realm/GUID matching, restricted and failing API reads, CRUD commands, nameplate
+current-realm filtering, GUID matching, character isolation, restricted and failing API reads, CRUD commands, nameplate
 reuse, forbidden plates, world transitions, encounter cooldowns, window actions,
 and saved-data preservation. It cannot verify rendering, protected-frame rules,
 or live PvP identity availability. Tests are not loaded by the addon's TOC.

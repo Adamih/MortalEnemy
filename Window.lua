@@ -23,7 +23,7 @@ function ME.RefreshWindow()
             local entry, style = item.entry, ME.styles[item.entry.status]
             row.key = item.key
             row.icon:SetTexture(style.icon)
-            row.name:SetText(entry.name .. "-" .. entry.realm)
+            row.name:SetText(entry.name)
             row.name:SetTextColor(style.r, style.g, style.b)
             row.detail:SetText(style.label .. (entry.lastSeen and (" • " .. (entry.lastZone or "Unknown") .. " • " .. date("%d %b %H:%M", entry.lastSeen)) or " • Not seen yet"))
             row.selected:SetShown(selectedKey == item.key)
