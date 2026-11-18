@@ -87,14 +87,21 @@ function ME.RefreshWindow()
     window.detailIcon:SetShown(entry ~= nil)
     if entry then
         local style = ME.styles[entry.status]
-        window.detailIcon:SetTexture(style.icon)
+        local classFile = ME.ClassToken(entry)
+        window.detailIcon:SetTexture(classFile and ("Interface\\Icons\\ClassIcon_" .. classFile)
+            or "Interface\\Icons\\INV_Misc_QuestionMark")
         window.status:SetTextColor(style.r, style.g, style.b)
+    end
+    local faction = entry and entry.faction
+    window.factionIcon:SetShown(faction == "Horde" or faction == "Alliance")
+    if faction == "Horde" or faction == "Alliance" then
+        window.factionIcon:SetTexture("Interface\\TargetingFrame\\UI-PVP-" .. faction)
     end
     window.characterInfo:SetText(entry and ((entry.level and ("Level " .. entry.level) or "Level unknown")
         .. " • " .. (entry.race or "Race unknown") .. " • " .. (entry.class or "Class unknown")) or "")
     local observed = {}
     if entry then
-        for _, field in ipairs({ "level", "race", "class" }) do
+        for _, field in ipairs({ "level", "race", "class", "faction" }) do
             local stamp = entry[field .. "ObservedAt"]
             if stamp then
                 observed[#observed + 1] = field:sub(1, 1):upper() .. field:sub(2) .. " observed: " .. date("%d %b %Y, %H:%M", stamp)
@@ -209,7 +216,10 @@ local function CreateWindow()
     window.detailIcon = window.Content:CreateTexture(nil, "ARTWORK")
     window.detailIcon:SetSize(36, 36)
     window.detailIcon:SetPoint("TOPLEFT", 354, -188)
-    window.selection = Label("", "GameFontNormalLarge", 400, -188, 342)
+    window.factionIcon = window.Content:CreateTexture(nil, "ARTWORK")
+    window.factionIcon:SetSize(26, 28)
+    window.factionIcon:SetPoint("TOPLEFT", 722, -188)
+    window.selection = Label("", "GameFontNormalLarge", 400, -188, 310)
     window.selection:SetWordWrap(false)
     window.status = Label("", "GameFontHighlight", 400, -215, 342)
     window.characterInfo = Label("", "GameFontHighlight", 354, -249, 386)

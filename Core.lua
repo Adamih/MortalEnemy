@@ -70,7 +70,13 @@ function ME.InitDB()
             if type(entry.guid) ~= "string" then entry.guid = nil end
             if type(entry.lastSeen) ~= "number" then entry.lastSeen = nil end
             if type(entry.lastZone) ~= "string" then entry.lastZone = nil end
-            for _, field in ipairs({ "class", "race", "level" }) do
+            if type(entry.classFile) ~= "string" or not entry.classFile:match("^[A-Z]+$") then
+                entry.classFile, entry.classFileObservedAt = nil, nil
+            end
+            if entry.faction ~= "Horde" and entry.faction ~= "Alliance" and entry.faction ~= "Neutral" then
+                entry.faction, entry.factionObservedAt = nil, nil
+            end
+            for _, field in ipairs({ "class", "race", "level", "classFile", "faction" }) do
                 local valid = field == "level" and type(entry[field]) == "number" and entry[field] > 0
                     and entry[field] < math.huge and entry[field] % 1 == 0
                     or field ~= "level" and type(entry[field]) == "string" and entry[field] ~= ""
@@ -121,6 +127,15 @@ function ME.Find(identity)
         end
     end
 end
+function ME.ClassToken(entry)
+    if not entry then return nil end
+    if type(entry.classFile) == "string" and entry.classFile:match("^[A-Z]+$") then return entry.classFile end
+    -- Existing records contain localized class names; resolve them without
+    -- requiring another encounter when the client already knows the mapping.
+    for _, names in ipairs({ LOCALIZED_CLASS_NAMES_MALE or {}, LOCALIZED_CLASS_NAMES_FEMALE or {} }) do
+        for token, label in pairs(names) do if label == entry.class then return token end end
+    end
+end
 local characterRefresh = {}
 function ME.ReadCharacterInfo(unit)
     local info, observed = {}, time()
@@ -129,6 +144,14 @@ function ME.ReadCharacterInfo(unit)
         if type(value) == "string" and value ~= "" and value ~= UNKNOWN and value ~= UNKNOWNOBJECT then
             info[key], info[key .. "ObservedAt"] = value, observed
         end
+    end
+    local ok, _, classFile = pcall(UnitClass, unit)
+    if ok and not ME.IsSecret(classFile) and type(classFile) == "string" and classFile:match("^[A-Z]+$") then
+        info.classFile, info.classFileObservedAt = classFile, observed
+    end
+    local faction = ME.Read(UnitFactionGroup, unit)
+    if faction == "Horde" or faction == "Alliance" or faction == "Neutral" then
+        info.faction, info.factionObservedAt = faction, observed
     end
     local level = ME.Read(UnitLevel, unit)
     if type(level) == "number" and level > 0 and level < math.huge and level % 1 == 0 then
@@ -139,7 +162,7 @@ end
 function ME.ApplyCharacterInfo(entry, info)
     if type(info) ~= "table" then return false end
     local changed = false
-    for _, key in ipairs({ "class", "race", "level" }) do
+    for _, key in ipairs({ "class", "race", "level", "classFile", "faction" }) do
         local stamp = key .. "ObservedAt"
         if info[key] ~= nil and info[stamp] and (not entry[stamp] or info[stamp] >= entry[stamp]) then
             if entry[key] ~= info[key] or entry[stamp] ~= info[stamp] then changed = true end

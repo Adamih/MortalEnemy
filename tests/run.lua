@@ -141,7 +141,17 @@ function UnitIsSameServer(name)
     return false
 end
 function UnitGUID(unit) return units[unit] and units[unit].guid end
-function UnitClass(unit) return units[unit] and units[unit].class end
+LOCALIZED_CLASS_NAMES_MALE = { WARLOCK = "Warlock", MAGE = "Mage", PRIEST = "Priest", ROGUE = "Rogue" }
+function UnitClass(unit)
+    local u = units[unit]
+    if not u then return nil end
+    local token = u.classFile
+    if token == nil then
+        for file, label in pairs(LOCALIZED_CLASS_NAMES_MALE) do if u.class == label then token = file end end
+    end
+    return u.class, token
+end
+function UnitFactionGroup(unit) return units[unit] and units[unit].faction end
 function UnitRace(unit) return units[unit] and units[unit].race end
 function UnitLevel(unit) return units[unit] and units[unit].level end
 function UnitIsUnit(a, b) return units[a] ~= nil and units[a] == units[b] end
@@ -583,4 +593,28 @@ check(profileEntry.note == "Keep my note", "automatic detail refresh never chang
 ME.InitDB()
 check(ME.db.entries["profile example"].level == 29 and ME.db.entries["profile example"].class == "Mage",
     "recorded character info survives database reinitialization")
+units.target = profileTarget
+profileTarget.class, profileTarget.classFile, profileTarget.faction = "Warlock", "WARLOCK", "Horde"
+now = now + 10
+event("PLAYER_TARGET_CHANGED")
+ME.SelectEntry("profile example")
+check(book.detailIcon.texture == "Interface\\Icons\\ClassIcon_WARLOCK", "detail header uses class icon")
+check(book.factionIcon:IsShown() and book.factionIcon.texture == "Interface\\TargetingFrame\\UI-PVP-Horde", "detail header displays Horde emblem")
+check(profileEntry.classFile == "WARLOCK" and profileEntry.faction == "Horde", "class token and faction saved")
+local factionStamp = profileEntry.factionObservedAt
+profileTarget.classFile, profileTarget.faction = secret, secret
+now = now + 10
+event("PLAYER_TARGET_CHANGED")
+check(profileEntry.classFile == "WARLOCK" and profileEntry.faction == "Horde" and profileEntry.factionObservedAt == factionStamp,
+    "restricted class token and faction preserve previous snapshots")
+profileTarget.classFile, profileTarget.faction = "MAGE", "Alliance"
+event("PLAYER_TARGET_CHANGED")
+check(book.detailIcon.texture == "Interface\\Icons\\ClassIcon_MAGE" and book.factionIcon.texture == "Interface\\TargetingFrame\\UI-PVP-Alliance",
+    "header icons update with newly observed class and faction")
+for _, row in ipairs(book.rows) do
+    if row.key == "profile example" then check(row.icon.texture == ME.styles.enemy.icon, "list relationship icon remains unchanged") end
+end
+ME.SelectEntry("extra person9")
+check(book.detailIcon.texture == "Interface\\Icons\\INV_Misc_QuestionMark" and not book.factionIcon:IsShown(), "unknown class and faction have neutral fallback without stale emblem")
+check(ME.ClassToken({class = "Warlock"}) == "WARLOCK", "existing localized class records resolve icon before next encounter")
 io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, settings category, target strip, player menus, add-by-name form, per-character persistence, current-realm enforcement\n")

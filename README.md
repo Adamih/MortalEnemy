@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.6.0 targets interface 16001.
+The other player does not need the addon. Version 0.6.1 targets interface 16001.
 
 ## First run
 
@@ -50,7 +50,10 @@ window chrome. Settings stay on WoW's separate AddOns preferences page.
 ## Character information
 
 The detail pane shows the last recorded **level, race, and class**, with a separate
-observation time for each field. Unknown fields stay labelled unknown until the
+observation time for each field. Its header uses a class icon plus a Horde or
+Alliance emblem when faction has been observed. A question mark represents an
+unknown class; an unknown or neutral faction has no emblem. Rival/enemy icons in
+the list, nameplates, and encounter alerts keep their existing appearance. Unknown fields stay labelled unknown until the
 game provides them. These are observed snapshots, not remote live lookups.
 
 Marking your target captures the readable fields immediately. Marking from a

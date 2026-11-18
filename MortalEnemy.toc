@@ -1,7 +1,7 @@
 ## Interface: 16001
 ## Title: Mortal Enemy
 ## Notes: Remember rivals and mortal enemies. Recognize them when you meet again.
-## Version: 0.6.0
+## Version: 0.6.1
 ## SavedVariablesPerCharacter: MortalEnemyCharDB
 
 Core.lua
