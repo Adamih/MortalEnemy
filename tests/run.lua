@@ -32,7 +32,10 @@ function Methods:RebuildFromTooltipInfo()
     self:AddLine("Original unit information")
     TooltipDataProcessor.callback(self, {})
 end
-function Methods:SetText(text) safe(text); self.text = text end
+function Methods:SetText(text)
+    safe(text); self.text = text
+    if self.scripts.OnTextChanged then self.scripts.OnTextChanged(self) end
+end
 function Methods:GetText() return self.text end
 function Methods:GetStringWidth() return #self.text * 6 end
 function Methods:Hide()
@@ -59,6 +62,19 @@ function Methods:HasFocus() return self.focused or false end
 function Methods:ClearFocus() self.focused = false end
 function Methods:SetFocus() self.focused = true end
 function Methods:SetEnabled(value) self.enabled = value end
+function Methods:SetScrollChild(child) self.scrollChild = child end
+function Methods:SetVerticalScroll(value) self.scrollValue = value end
+function Methods:SetMinMaxValues(low, high) self.minimum, self.maximum = low, high end
+function Methods:SetValue(value)
+    self.value = value
+    if self.scripts.OnValueChanged then self.scripts.OnValueChanged(self, value) end
+end
+function Methods:SetThumbTexture(texture) self.thumb = object("texture", self) end
+function Methods:GetThumbTexture() return self.thumb end
+function PanelTemplates_TabResize(tab, padding, width) tab.tabWidth = width end
+function PanelTemplates_SelectTab(tab) tab.active = true end
+function PanelTemplates_DeselectTab(tab) tab.active = false end
+
 function Methods:GetWidth() return 160 end
 function Methods:GetHeight() return 160 end
 function Methods:GetFrameLevel() return 1 end
@@ -66,13 +82,17 @@ function Methods:GetEffectiveScale() return 2 end
 function Methods:GetCenter() return 300, 300 end
 function Methods:SetOwner(owner) self.owner = owner; self.unitToken = nil; self:ClearLines() end
 function Methods:IsOwned(owner) return self.owner == owner end
-for _, name in ipairs({"RegisterForClicks", "SetFrameLevel", "SetSize", "SetPoint", "SetWidth", "SetJustifyH", "SetShadowOffset", "EnableMouse", "SetFrameStrata", "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "ClearAllPoints", "SetClampedToScreen", "SetMovable", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetAllPoints", "SetColorTexture", "SetHighlightTexture", "SetAutoFocus", "SetMaxLetters", "SetTextColor"}) do
+for _, name in ipairs({"SetOrientation", "SetValueStep", "EnableMouseWheel", "SetFontObject", "SetMultiLine", "SetWordWrap", "SetVertexColor", "SetHeight", "RegisterForClicks", "SetFrameLevel", "SetSize", "SetPoint", "SetWidth", "SetJustifyH", "SetShadowOffset", "EnableMouse", "SetFrameStrata", "SetBackdrop", "SetBackdropColor", "SetBackdropBorderColor", "ClearAllPoints", "SetClampedToScreen", "SetMovable", "RegisterForDrag", "StartMoving", "StopMovingOrSizing", "SetAllPoints", "SetColorTexture", "SetHighlightTexture", "SetAutoFocus", "SetMaxLetters", "SetTextColor"}) do
     Methods[name] = function(...) end
 end
 function Methods:SetPoint(...) self.point = {...} end
-function CreateFrame(kind, name, parent)
+function CreateFrame(kind, name, parent, template)
     local result = object(kind, parent)
-    result.name = name
+    result.name, result.template = name, template
+    if template == "PortraitFrameTemplate" then
+        result.TitleContainer = { TitleText = object("font", result) }
+        result.PortraitContainer = { portrait = object("texture", result) }
+    end
     if name then _G[name] = result end
     return result
 end
@@ -476,4 +496,30 @@ addEnemy.scripts.OnClick(addEnemy)
 check(not dialog:IsShown() and ME.db.entries["charlie story"].status == "enemy"
     and ME.db.entries["charlie story"].note == "An old grudge", "name form saves relationship and note")
 check(MortalEnemyWindow:IsShown(), "adding by name returns to nemesis list")
+check(MortalEnemyWindow.template == "PortraitFrameTemplate" and MortalEnemyAddDialog.template == "PortraitFrameTemplate",
+    "main window and add dialog use native portrait frames")
+local book = MortalEnemyWindow
+book.search:SetText("Charlie")
+check(book.counter:GetText():find("1 shown", 1, true) and book.rows[1].key == "charlie story", "search filters full names")
+book.search:SetText("old grudge")
+check(book.rows[1].key == "charlie story", "search also matches notes")
+book.filterTabs[2].scripts.OnClick(book.filterTabs[2])
+check(book.empty:IsShown(), "relationship filter combines with search")
+book.filterTabs[3].scripts.OnClick(book.filterTabs[3])
+check(not book.empty:IsShown() and book.rows[1].key == "charlie story", "enemy filter shows matching entry")
+book.search:SetText("Nobody matches this")
+check(book.empty:IsShown() and not book.editButtons[1].enabled, "empty search disables detail actions")
+book.search:SetText("")
+book.filterTabs[1].scripts.OnClick(book.filterTabs[1])
+for i = 1, 12 do ME.AddNamedPlayer("Extra Person" .. i, "rival") end
+check(book.maxScroll > 0 and book.scrollbar:IsShown(), "long lists have a scrollbar")
+book.listScroll.scripts.OnMouseWheel(book.listScroll, -3)
+check(book.scrollOffset > 0 and book.listScroll.scrollValue == book.scrollOffset, "mouse wheel scrolls list")
+book.scrollbar:SetValue(12)
+check(book.listScroll.scrollValue == 12, "scrollbar moves list")
+ME.SelectEntry("extra person9")
+check(book.search:GetText() == "" and book.filterTabs[1].active and book.selection:GetText() == "Extra Person9",
+    "selecting newly added entry clears filters and displays its details")
+book.search:SetText("No results")
+check(book.scrollOffset == 0 and not book.scrollbar:IsShown(), "filter shrink resets scroll and hides scrollbar")
 io.write("PASS: initialization, identity safety, matching, CRUD, sightings, cooldowns, nameplate reuse, independent badges/tooltips, tooltip lifecycle, commands, UI, settings category, target strip, player menus, add-by-name form, per-character persistence, current-realm enforcement\n")

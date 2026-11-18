@@ -1,37 +1,99 @@
 local _, ME = ...
 local window, selectedKey
-local page, pageSize = 1, 5
+local filter, query = "all", ""
+local rowHeight, listHeight = 48, 294
 local function Button(parent, text, width, x, y, callback)
     local button = CreateFrame("Button", nil, parent, "UIPanelButtonTemplate")
     button:SetSize(width, 24)
+    button:SetFrameLevel(parent:GetFrameLevel() + 4)
     button:SetPoint("TOPLEFT", x, y)
     button:SetText(text)
     button:SetScript("OnClick", callback)
     return button
 end
+local function ScrollList(value)
+    value = math.max(0, math.min(window.maxScroll or 0, value))
+    window.scrollOffset = value
+    window.listScroll:SetVerticalScroll(value)
+    window.scrollbar:SetValue(value)
+end
+local function MakeRow(index)
+    local row = CreateFrame("Button", nil, window.listContent)
+    row:SetSize(268, 44)
+    row:SetPoint("TOPLEFT", 0, -(index - 1) * rowHeight)
+    row.selected = row:CreateTexture(nil, "BACKGROUND")
+    row.selected:SetAllPoints()
+    row.selected:SetTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight")
+    row.selected:SetVertexColor(1, 0.72, 0.3, 0.65)
+    row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
+    row.icon = row:CreateTexture(nil, "ARTWORK")
+    row.icon:SetSize(28, 28)
+    row.icon:SetPoint("LEFT", 3, 0)
+    row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    row.name:SetPoint("TOPLEFT", 39, -5)
+    row.name:SetWidth(224)
+    row.name:SetJustifyH("LEFT")
+    row.name:SetWordWrap(false)
+    row.detail = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
+    row.detail:SetPoint("TOPLEFT", 39, -24)
+    row.detail:SetWidth(224)
+    row.detail:SetJustifyH("LEFT")
+    row:SetScript("OnClick", function(self)
+        window.note:ClearFocus()
+        selectedKey = self.key
+        ME.RefreshWindow()
+    end)
+    return row
+end
 function ME.RefreshWindow()
     if not window or not window:IsShown() then return end
-    local entries = ME.Entries()
-    local pages = math.max(1, math.ceil(#entries / pageSize))
-    page = math.max(1, math.min(page, pages))
-    window.counter:SetText(#entries .. " remembered  •  " .. page .. " / " .. pages)
-    window.empty:SetShown(#entries == 0)
-    for i, row in ipairs(window.rows) do
-        local item = entries[(page - 1) * pageSize + i]
-        row:Hide()
-        if item then
-            local entry, style = item.entry, ME.styles[item.entry.status]
-            row.key = item.key
-            row.icon:SetTexture(style.icon)
-            row.name:SetText(entry.name)
-            row.name:SetTextColor(style.r, style.g, style.b)
-            row.detail:SetText(style.label .. (entry.lastSeen and (" • " .. (entry.lastZone or "Unknown") .. " • " .. date("%d %b %H:%M", entry.lastSeen)) or " • Not seen yet"))
-            row.selected:SetShown(selectedKey == item.key)
-            row:Show()
+    local allEntries, entries = ME.Entries(), {}
+    for _, item in ipairs(allEntries) do
+        local entry = item.entry
+        if (filter == "all" or entry.status == filter)
+            and (query == "" or string.lower(entry.name):find(query, 1, true)
+                or string.lower(entry.note or ""):find(query, 1, true)) then
+            entries[#entries + 1] = item
         end
     end
+    local selectedVisible = false
+    for _, item in ipairs(entries) do if item.key == selectedKey then selectedVisible = true end end
+    if not selectedVisible then selectedKey = entries[1] and entries[1].key end
+    window.counter:SetText(#entries .. " shown / " .. #allEntries .. " remembered")
+    window.empty:SetText(#allEntries == 0 and "Your book is empty.\nAdd a player or mark your target."
+        or "No matching nemeses.")
+    window.empty:SetShown(#entries == 0)
+    for _, row in ipairs(window.rows) do row:Hide(); row.key = nil end
+    for i, item in ipairs(entries) do
+        local row = window.rows[i]
+        if not row then row = MakeRow(i); window.rows[i] = row end
+        local entry, style = item.entry, ME.styles[item.entry.status]
+        row.key = item.key
+        row.icon:SetTexture(style.icon)
+        row.name:SetText(entry.name)
+        row.name:SetTextColor(style.r, style.g, style.b)
+        row.detail:SetText(style.label)
+        row.selected:SetShown(selectedKey == item.key)
+        row:Show()
+    end
+    window.listContent:SetHeight(math.max(listHeight, #entries * rowHeight))
+    window.maxScroll = math.max(0, #entries * rowHeight - listHeight)
+    window.scrollbar:SetMinMaxValues(0, window.maxScroll)
+    window.scrollbar:SetShown(window.maxScroll > 0)
+    ScrollList(window.scrollOffset or 0)
     local entry = selectedKey and ME.db.entries[selectedKey]
-    window.selection:SetText(entry and ("Selected: " .. entry.name) or "Select a player above to edit their note or status.")
+    window.selection:SetText(entry and entry.name or "Choose a nemesis")
+    window.status:SetText(entry and ME.styles[entry.status].label or "Select a name from the list.")
+    window.detailIcon:SetShown(entry ~= nil)
+    if entry then
+        local style = ME.styles[entry.status]
+        window.detailIcon:SetTexture(style.icon)
+        window.status:SetTextColor(style.r, style.g, style.b)
+    end
+    window.lastSeen:SetText(entry and (entry.lastSeen
+        and ("Last seen: " .. date("%d %b %Y, %H:%M", entry.lastSeen) .. "\n" .. (entry.lastZone or "Unknown zone"))
+        or "Last seen: not yet recorded") or "")
+    window.added:SetText(entry and entry.added and ("Remembered since " .. date("%d %b %Y", entry.added)) or "")
     if window.editingKey ~= selectedKey or not window.note:HasFocus() then
         window.note:SetText(entry and entry.note or "")
         window.editingKey = selectedKey
@@ -42,16 +104,13 @@ end
 function ME.RefreshTargetStrip()
     if not window or not window:IsShown() then return end
     local identity = ME.Identity("target")
-    local isSelf = ME.Read(UnitIsUnit, "target", "player") == true
-    local valid = identity and not isSelf
-    local entry = valid and ME.Find(identity)
-    window.targetName:SetText(valid and ("Target: " .. identity.name .. (entry and (" — " .. ME.styles[entry.status].label) or ""))
-        or "Target another player on your realm to mark them.")
+    local valid = identity and ME.Read(UnitIsUnit, "target", "player") ~= true
+    window.targetName:SetText(valid and ("Target: " .. identity.name) or "Target another player on your realm.")
     for _, button in ipairs(window.targetButtons) do button:SetEnabled(valid and true or false) end
 end
 local function CreateWindow()
-    window = CreateFrame("Frame", "MortalEnemyWindow", UIParent, "BackdropTemplate")
-    window:SetSize(530, 570)
+    window = CreateFrame("Frame", "MortalEnemyWindow", UIParent, "PortraitFrameTemplate")
+    window:SetSize(780, 570)
     window:SetPoint("CENTER")
     window:SetFrameStrata("DIALOG")
     window:SetClampedToScreen(true)
@@ -60,84 +119,152 @@ local function CreateWindow()
     window:RegisterForDrag("LeftButton")
     window:SetScript("OnDragStart", function(self) self:StartMoving() end)
     window:SetScript("OnDragStop", function(self) self:StopMovingOrSizing() end)
-    window:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-    window:SetBackdropColor(0.055, 0.045, 0.04, 0.98)
-    window:SetBackdropBorderColor(0.48, 0.26, 0.2, 1)
-    local function Label(text, font, x, y)
-        local label = window:CreateFontString(nil, "OVERLAY", font)
+    window.TitleContainer.TitleText:SetText("Mortal Enemy — Book of Grudges")
+    window.PortraitContainer.portrait:SetTexture(ME.styles.enemy.icon)
+    -- Put our content above the native inset backgrounds without altering them.
+    window.Content = CreateFrame("Frame", nil, window)
+    window.Content:SetAllPoints(window)
+    window.Content:SetFrameLevel(window:GetFrameLevel() + 3)
+    window.Content:EnableMouse(false)
+    local function Label(text, font, x, y, width)
+        local label = window.Content:CreateFontString(nil, "OVERLAY", font)
         label:SetPoint("TOPLEFT", x, y)
+        label:SetJustifyH("LEFT")
+        if width then label:SetWidth(width) end
         label:SetText(text)
         return label
     end
-    Label("MORTAL ENEMY", "GameFontNormalLarge", 20, -19)
-    Label("A familiar face. An unfinished grudge.", "GameFontHighlightSmall", 20, -44)
-    local close = CreateFrame("Button", nil, window, "UIPanelCloseButton")
-    close:SetPoint("TOPRIGHT", -4, -4)
+    Label("A familiar face. An unfinished grudge.", "GameFontHighlightSmall", 70, -38)
     table.insert(UISpecialFrames, "MortalEnemyWindow")
-    Button(window, "Add player", 140, 20, -68, function() ME.ShowAddPlayer() end)
-    Button(window, "Settings", 110, 398, -68, function() ME.OpenSettings() end)
-    local strip = window:CreateTexture(nil, "BACKGROUND")
-    strip:SetColorTexture(0.26, 0.16, 0.1, 0.45)
-    strip:SetPoint("TOPLEFT", 20, -104)
-    strip:SetSize(488, 72)
-    window.targetName = Label("", "GameFontHighlightSmall", 30, -115)
-    window.targetName:SetWidth(468)
-    window.targetName:SetJustifyH("LEFT")
+    Button(window, "Add player", 130, 20, -67, function() ME.ShowAddPlayer() end)
+    Button(window, "Settings", 110, 650, -67, function() ME.OpenSettings() end)
+    local strip = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
+    strip:SetPoint("TOPLEFT", 20, -102)
+    strip:SetSize(740, 50)
+    window.targetName = Label("", "GameFontHighlightSmall", 30, -119, 372)
     window.targetButtons = {
-        Button(window, "Mark as Rival", 170, 30, -142, function() selectedKey = ME.MarkTarget("rival") or selectedKey; ME.RefreshWindow() end),
-        Button(window, "Mark as Mortal Enemy", 220, 208, -142, function() selectedKey = ME.MarkTarget("enemy") or selectedKey; ME.RefreshWindow() end),
+        Button(window, "Mark as Rival", 145, 414, -116, function() ME.SelectEntry(ME.MarkTarget("rival")); end),
+        Button(window, "Mark as Mortal Enemy", 183, 567, -116, function() ME.SelectEntry(ME.MarkTarget("enemy")); end),
     }
-    window.counter = Label("", "GameFontHighlightSmall", 20, -191)
-    window.empty = Label("No nemeses yet. Add a player by name or mark your target.", "GameFontHighlightSmall", 26, -234)
+    local listInset = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
+    listInset:SetPoint("TOPLEFT", 20, -170)
+    listInset:SetSize(304, 378)
+    local detailInset = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
+    detailInset:SetPoint("TOPLEFT", 338, -170)
+    detailInset:SetSize(422, 378)
+    window.search = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
+    window.search:SetFrameLevel(window:GetFrameLevel() + 4)
+    window.search:SetSize(278, 24)
+    window.search:SetPoint("TOPLEFT", 30, -180)
+    window.search:SetAutoFocus(false)
+    window.search:SetMaxLetters(80)
+    window.searchHint = window.search:CreateFontString(nil, "OVERLAY", "GameFontDisableSmall")
+    window.searchHint:SetPoint("LEFT", 6, 0)
+    window.searchHint:SetText("Search names or notes…")
+    window.search:SetScript("OnTextChanged", function(self)
+        query = string.lower(ME.Trim(self:GetText()))
+        window.searchHint:SetShown(query == "")
+        window.scrollOffset = 0
+        ME.RefreshWindow()
+    end)
+    window.search:SetScript("OnEscapePressed", function(self) self:SetText(""); self:ClearFocus() end)
+    window.counter = Label("", "GameFontHighlightSmall", 28, -211)
+    window.listScroll = CreateFrame("ScrollFrame", nil, window)
+    window.listScroll:SetFrameLevel(window:GetFrameLevel() + 4)
+    window.listScroll:SetSize(268, listHeight)
+    window.listScroll:SetPoint("TOPLEFT", 28, -236)
+    window.listContent = CreateFrame("Frame", nil, window.listScroll)
+    window.listContent:SetSize(268, listHeight)
+    window.listScroll:SetScrollChild(window.listContent)
     window.rows = {}
-    for i = 1, pageSize do
-        local row = CreateFrame("Button", nil, window)
-        row:SetSize(486, 39)
-        row:SetPoint("TOPLEFT", 22, -214 - (i - 1) * 42)
-        row.selected = row:CreateTexture(nil, "BACKGROUND")
-        row.selected:SetAllPoints()
-        row.selected:SetColorTexture(0.4, 0.22, 0.12, 0.5)
-        row:SetHighlightTexture("Interface\\QuestFrame\\UI-QuestTitleHighlight", "ADD")
-        row.icon = row:CreateTexture(nil, "ARTWORK")
-        row.icon:SetSize(30, 30)
-        row.icon:SetPoint("LEFT", 3, 0)
-        row.name = row:CreateFontString(nil, "OVERLAY", "GameFontNormal")
-        row.name:SetPoint("TOPLEFT", 42, -3)
-        row.name:SetWidth(436)
-        row.name:SetJustifyH("LEFT")
-        row.detail = row:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall")
-        row.detail:SetPoint("TOPLEFT", 42, -21)
-        row.detail:SetWidth(436)
-        row.detail:SetJustifyH("LEFT")
-        row:SetScript("OnClick", function(self) selectedKey = self.key; ME.RefreshWindow() end)
-        window.rows[i] = row
-    end
-    Button(window, "Previous", 100, 20, -432, function() page = page - 1; ME.RefreshWindow() end)
-    Button(window, "Next", 100, 128, -432, function() page = page + 1; ME.RefreshWindow() end)
-    window.selection = Label("", "GameFontHighlightSmall", 20, -469)
-    window.note = CreateFrame("EditBox", nil, window, "InputBoxTemplate")
-    window.note:SetSize(478, 26)
-    window.note:SetPoint("TOPLEFT", 26, -490)
+    window.scrollbar = CreateFrame("Slider", nil, window)
+    window.scrollbar:SetFrameLevel(window:GetFrameLevel() + 5)
+    window.scrollbar:SetSize(16, listHeight)
+    window.scrollbar:SetPoint("TOPLEFT", 304, -236)
+    window.scrollbar:SetOrientation("VERTICAL")
+    window.scrollbar:SetMinMaxValues(0, 0)
+    window.scrollbar:SetValueStep(1)
+    window.scrollbar:SetThumbTexture("Interface\\Buttons\\UI-ScrollBar-Knob")
+    window.scrollbar:GetThumbTexture():SetSize(16, 24)
+    window.scrollbar:SetScript("OnValueChanged", function(_, value)
+        window.scrollOffset = value
+        window.listScroll:SetVerticalScroll(value)
+    end)
+    window.listScroll:EnableMouseWheel(true)
+    window.listScroll:SetScript("OnMouseWheel", function(_, delta) ScrollList((window.scrollOffset or 0) - delta * rowHeight) end)
+    window.empty = Label("", "GameFontHighlightSmall", 38, -260, 240)
+    window.detailIcon = window.Content:CreateTexture(nil, "ARTWORK")
+    window.detailIcon:SetSize(36, 36)
+    window.detailIcon:SetPoint("TOPLEFT", 354, -188)
+    window.selection = Label("", "GameFontNormalLarge", 400, -188, 342)
+    window.selection:SetWordWrap(false)
+    window.status = Label("", "GameFontHighlight", 400, -215, 342)
+    window.lastSeen = Label("", "GameFontHighlightSmall", 354, -254, 386)
+    window.added = Label("", "GameFontDisableSmall", 354, -294, 386)
+    Label("Your grudge", "GameFontNormal", 354, -326)
+    local noteInset = CreateFrame("Frame", nil, window, "InsetFrameTemplate")
+    noteInset:SetPoint("TOPLEFT", 350, -348)
+    noteInset:SetSize(394, 108)
+    window.note = CreateFrame("EditBox", nil, window)
+    window.note:SetFrameLevel(window:GetFrameLevel() + 4)
+    window.note:SetSize(378, 92)
+    window.note:SetPoint("TOPLEFT", 358, -356)
+    window.note:SetFontObject("ChatFontNormal")
+    window.note:SetTextColor(0.95, 0.9, 0.8)
+    window.note:SetMultiLine(true)
     window.note:SetAutoFocus(false)
     window.note:SetMaxLetters(240)
     window.note:SetScript("OnEscapePressed", function(self) self:ClearFocus() end)
     local function SaveNote()
         local entry = selectedKey and ME.db.entries[selectedKey]
-        if entry then entry.note = ME.Note(window.note:GetText()); ME.Print("Note saved."); window.note:ClearFocus(); ME.Changed() end
+        if entry then
+            entry.note = ME.Note(window.note:GetText())
+            window.note:ClearFocus()
+            ME.Print("Note saved.")
+            ME.Changed()
+        end
     end
     window.note:SetScript("OnEnterPressed", SaveNote)
     window.editButtons = {
-        Button(window, "Save note", 106, 20, -526, SaveNote),
-        Button(window, "Rival", 100, 134, -526, function()
+        Button(window, "Save note", 120, 354, -466, SaveNote),
+        Button(window, "Remove", 120, 622, -466, function() if selectedKey then ME.Remove(selectedKey) end end),
+        Button(window, "Rival", 150, 354, -504, function()
             if selectedKey and ME.db.entries[selectedKey] then ME.db.entries[selectedKey].status = "rival"; ME.Changed() end
         end),
-        Button(window, "Mortal Enemy", 140, 242, -526, function()
+        Button(window, "Mortal Enemy", 182, 512, -504, function()
             if selectedKey and ME.db.entries[selectedKey] then ME.db.entries[selectedKey].status = "enemy"; ME.Changed() end
         end),
-        Button(window, "Remove", 118, 390, -526, function() if selectedKey then ME.Remove(selectedKey); selectedKey = nil; ME.RefreshWindow() end end),
     }
+    window.filterTabs = {}
+    for i, item in ipairs({ { "all", "All" }, { "rival", "Rivals" }, { "enemy", "Enemies" } }) do
+        local tab = CreateFrame("Button", nil, window, "PanelTabButtonTemplate")
+        tab:SetText(item[2])
+        tab:SetPoint("TOPLEFT", 24 + (i - 1) * 104, -565)
+        PanelTemplates_TabResize(tab, 0, 96)
+        tab:SetScript("OnClick", function()
+            filter = item[1]
+            window.scrollOffset = 0
+            for _, other in ipairs(window.filterTabs) do PanelTemplates_DeselectTab(other) end
+            PanelTemplates_SelectTab(tab)
+            ME.RefreshWindow()
+        end)
+        window.filterTabs[i] = tab
+        if item[1] == filter then PanelTemplates_SelectTab(tab) else PanelTemplates_DeselectTab(tab) end
+    end
     window:SetScript("OnShow", ME.RefreshWindow)
     window:Hide()
+end
+function ME.SelectEntry(key)
+    if not key then return end
+    selectedKey, filter, query = key, "all", ""
+    if not window then CreateWindow() end
+    window.search:SetText("")
+    window:Show()
+    for i, tab in ipairs(window.filterTabs) do
+        if i == 1 then PanelTemplates_SelectTab(tab) else PanelTemplates_DeselectTab(tab) end
+    end
+    ME.RefreshWindow()
+    for i, item in ipairs(ME.Entries()) do if item.key == key then ScrollList((i - 1) * rowHeight); break end end
 end
 function ME.ToggleWindow()
     if not window then CreateWindow() end
@@ -147,24 +274,20 @@ end
 local addDialog
 function ME.ShowAddPlayer()
     if not addDialog then
-        addDialog = CreateFrame("Frame", "MortalEnemyAddDialog", UIParent, "BackdropTemplate")
+        addDialog = CreateFrame("Frame", "MortalEnemyAddDialog", UIParent, "PortraitFrameTemplate")
         addDialog:SetSize(400, 286)
         addDialog:SetPoint("CENTER")
         addDialog:SetFrameStrata("FULLSCREEN_DIALOG")
         addDialog:SetClampedToScreen(true)
         addDialog:EnableMouse(true)
-        addDialog:SetBackdrop({ bgFile = "Interface\\Buttons\\WHITE8X8", edgeFile = "Interface\\Buttons\\WHITE8X8", edgeSize = 1 })
-        addDialog:SetBackdropColor(0.07, 0.05, 0.04, 1)
-        addDialog:SetBackdropBorderColor(0.48, 0.26, 0.2, 1)
+        addDialog.TitleContainer.TitleText:SetText("Add a player")
+        addDialog.PortraitContainer.portrait:SetTexture(ME.styles.enemy.icon)
         local function Label(text, x, y)
             local label = addDialog:CreateFontString(nil, "OVERLAY", "GameFontNormal")
             label:SetPoint("TOPLEFT", x, y)
             label:SetText(text)
             return label
         end
-        Label("Add a player on your realm", 20, -20)
-        local close = CreateFrame("Button", nil, addDialog, "UIPanelCloseButton")
-        close:SetPoint("TOPRIGHT", -4, -4)
         table.insert(UISpecialFrames, "MortalEnemyAddDialog")
         local function Edit(label, width, x, y, maxLetters)
             Label(label, x, y)
@@ -188,12 +311,8 @@ function ME.ShowAddPlayer()
         local function Add(status)
             local key, reason = ME.AddNamedPlayer(addDialog.first:GetText() .. " " .. addDialog.last:GetText(), status, addDialog.note:GetText())
             if not key then addDialog.error:SetText(reason); return end
-            selectedKey = key
-            for i, item in ipairs(ME.Entries()) do if item.key == key then page = math.ceil(i / pageSize); break end end
             addDialog:Hide()
-            if not window then CreateWindow() end
-            window:Show()
-            ME.RefreshWindow()
+            ME.SelectEntry(key)
         end
         Button(addDialog, "Add Rival", 164, 20, -234, function() Add("rival") end)
         Button(addDialog, "Add Mortal Enemy", 184, 196, -234, function() Add("enemy") end)

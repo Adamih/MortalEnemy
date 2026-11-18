@@ -2,7 +2,7 @@
 
 A small WoW Forever addon for remembering rivals and mortal enemies, on either
 faction. Mark a player, keep a note, and recognize them when you meet again.
-The other player does not need the addon. Version 0.4.0 targets interface 16001.
+The other player does not need the addon. Version 0.5.0 targets interface 16001.
 
 ## First run
 
@@ -34,6 +34,18 @@ to move it out of the way; the position is saved independently for each characte
 Hover it for instructions. Uncheck **Show minimap button** on the AddOns settings
 page to hide it. This preference is saved per character; use `/mortal settings`
 to open the preferences and enable the button again.
+
+## Book of Grudges
+
+The main window uses Blizzard's native portrait frame, with a skull portrait,
+standard title/close controls, native inset panels, and All / Rivals / Enemies tabs.
+The left pane is a scrollable list; use the mouse wheel or drag the scrollbar.
+Search matches full names and personal notes, combined with the active tab.
+The right pane shows the selected player's relationship, last recorded sighting,
+date added, and an editable grudge. Save the note or change/remove their relationship
+from that pane. Adding a player clears search/filters and scrolls to their entry.
+The target strip remains above both panes, and Add player uses matching native
+window chrome. Settings stay on WoW's separate AddOns preferences page.
 
 ## Adding players
 
@@ -149,6 +161,9 @@ them untargeted but their nameplate visible, and during combat. The output repor
 ### In-game acceptance checklist
 
 - [ ] Loads without Lua errors; `/mortal` opens and closes the book.
+- [ ] Native portrait frame, inset panes, and tabs render correctly.
+- [ ] List scrolls with the wheel/scrollbar; search and status tabs combine.
+- [ ] Selecting a row shows its sighting history and editable note in the right pane.
 - [ ] Settings button opens the actual WoW AddOns preferences page.
 - [ ] Player right-click actions mark the clicked character after retargeting.
 - [ ] Add-by-name form validates first/last name and saves optional notes.
